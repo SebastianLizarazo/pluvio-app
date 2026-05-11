@@ -32,10 +32,27 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
 
 # typescript
 *.tsbuildinfo
 
 # generated native folders
-/ios
 /android
+/ios
+
+# Android build outputs
+*.apk
+*.aab
+build/
+.gradle/
+
+# macOS
+.AppleDouble
+.LSOverride
+
+# Visual Studio Code
+.vscode/
+
+# Supabase
+.supabase/
