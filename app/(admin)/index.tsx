@@ -1,11 +1,14 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
-import { TankIndicator } from '@/components';
 import { useAppSession } from '@/hooks/useAppSession';
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
 import { TANK_DEFAULT_LIMITS } from '@/constants/app';
+
+type TankPeriod = 'day' | 'month' | 'semester';
 
 const COLORS = {
   primary: '#1B3A6B',
@@ -18,7 +21,9 @@ const COLORS = {
 };
 
 export default function AdminDashboardScreen() {
+  const router = useRouter();
   const { appUser } = useAppSession();
+  const [tankPeriod, setTankPeriod] = useState<TankPeriod>('day');
   const { todayMeasurements, todayTotalMm, monthTotalMm, semesterTotalMm, latest } = useUserMeasurements();
 
   const diameterCm = 20; // TODO: from pluviometer config
@@ -30,10 +35,15 @@ export default function AdminDashboardScreen() {
 
   const userName = appUser?.fullName?.split(' ')[0] ?? 'Usuario';
 
-  // Calculate percentages
+  // Calculate percentages based on selected period
   const dayPercent = Math.min((todayTotalMm / TANK_DEFAULT_LIMITS.day) * 100, 100);
   const monthPercent = Math.min((monthTotalMm / TANK_DEFAULT_LIMITS.month) * 100, 100);
   const semesterPercent = Math.min((semesterTotalMm / TANK_DEFAULT_LIMITS.semester) * 100, 100);
+
+  // Selected period values
+  const selectedPercent = tankPeriod === 'day' ? dayPercent : tankPeriod === 'month' ? monthPercent : semesterPercent;
+  const selectedMm = tankPeriod === 'day' ? todayTotalMm : tankPeriod === 'month' ? monthTotalMm : semesterTotalMm;
+  const selectedLabel = tankPeriod === 'day' ? 'Día' : tankPeriod === 'month' ? 'Mes' : 'Semestre';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -52,27 +62,36 @@ export default function AdminDashboardScreen() {
       <Text style={styles.subGreeting}>Este es el estado de tu estación hoy.</Text>
 
       {/* Card Nivel de Agua */}
-      <Card style={styles.card}>
+      <Card style={[styles.card, styles.cardGray]}>
         <Card.Content>
           <Text style={styles.cardTitle}>Nivel de Agua</Text>
 
           {/* Tabs - simple implementation */}
           <View style={styles.tabs}>
-            <View style={[styles.tab, styles.tabActive]}>
-              <Text style={[styles.tabText, styles.tabTextActive]}>Día</Text>
-            </View>
-            <View style={styles.tab}>
-              <Text style={styles.tabText}>Mes</Text>
-            </View>
-            <View style={styles.tab}>
-              <Text style={styles.tabText}>Semestre</Text>
-            </View>
+            <TouchableOpacity
+              style={[styles.tab, tankPeriod === 'day' && styles.tabActive]}
+              onPress={() => setTankPeriod('day')}
+            >
+              <Text style={[styles.tabText, tankPeriod === 'day' && styles.tabTextActive]}>Día</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, tankPeriod === 'month' && styles.tabActive]}
+              onPress={() => setTankPeriod('month')}
+            >
+              <Text style={[styles.tabText, tankPeriod === 'month' && styles.tabTextActive]}>Mes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, tankPeriod === 'semester' && styles.tabActive]}
+              onPress={() => setTankPeriod('semester')}
+            >
+              <Text style={[styles.tabText, tankPeriod === 'semester' && styles.tabTextActive]}>Semestre</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Tank visualization */}
           <View style={styles.tankContainer}>
-            <View style={styles.tank}>
-              <View style={[styles.tankFill, { height: `${dayPercent}%` }]} />
+            <View style={[styles.tank, styles.tankWithBorder]}>
+              <View style={[styles.tankFill, { height: `${selectedPercent}%` }]} />
             </View>
             <View style={styles.tankLabels}>
               <Text style={styles.tankLabel}>100%</Text>
@@ -84,8 +103,8 @@ export default function AdminDashboardScreen() {
 
           {/* Volumen estimado */}
           <View style={styles.volumeContainer}>
-            <Text style={styles.volumeLabel}>VOLUMEN ESTIMADO</Text>
-            <Text style={styles.volumeValue}>{(todayTotalMm * 10).toLocaleString()} Litros</Text>
+            <Text style={styles.volumeLabel}>VOLUMEN ESTIMADO ({selectedLabel})</Text>
+            <Text style={styles.volumeValue}>{(selectedMm * 10).toLocaleString()} Litros</Text>
           </View>
         </Card.Content>
       </Card>
@@ -97,9 +116,9 @@ export default function AdminDashboardScreen() {
           {!hasTodayRecord ? (
             <>
               <Text style={styles.missingText}>Falta registro</Text>
-              <View style={styles.registerButton}>
+              <TouchableOpacity style={styles.registerButton} onPress={() => router.push('/(admin)/register')}>
                 <Text style={styles.registerButtonText}>Registrar ahora</Text>
-              </View>
+              </TouchableOpacity>
             </>
           ) : (
             <Text style={styles.recordText}>
@@ -110,7 +129,7 @@ export default function AdminDashboardScreen() {
       </Card>
 
       {/* Card Acumulado del Mes */}
-      <Card style={styles.card}>
+      <Card style={[styles.card, styles.cardGray]}>
         <Card.Content>
           <Text style={styles.cardLabel}>ACUMULADO DEL MES</Text>
           <View style={styles.metricRow}>
@@ -124,7 +143,7 @@ export default function AdminDashboardScreen() {
       </Card>
 
       {/* Card Última Medición */}
-      <Card style={styles.card}>
+      <Card style={[styles.card, styles.cardGray]}>
         <Card.Content>
           <Text style={styles.cardLabel}>ÚLTIMA MEDICIÓN</Text>
           <View style={styles.lastMeasurement}>
@@ -242,6 +261,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     justifyContent: 'flex-end',
+  },
+  tankWithBorder: {
+    borderWidth: 2,
+    borderColor: COLORS.chartBlue,
   },
   tankFill: {
     backgroundColor: COLORS.chartBlue,

@@ -47,7 +47,7 @@ const screenOptions = {
     paddingBottom: 8,
     paddingTop: 8,
   },
-  tabBarActiveTintColor: COLORS.white,
+  tabBarActiveTintColor: COLORS.primary,
   tabBarInactiveTintColor: COLORS.textSecondary,
   tabBarLabelStyle: {
     fontSize: 10,
@@ -118,6 +118,7 @@ export default function AdminLayout() {
           tabBarItemStyle: undefined,
         }}
       />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
     </Tabs>
   );
 }

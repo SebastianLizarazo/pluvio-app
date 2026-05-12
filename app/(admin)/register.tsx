@@ -16,9 +16,9 @@ const COLORS = {
 };
 
 const PRECIPITATION_OPTIONS = [
-  { label: 'Granizo', icon: 'cloud-snow' },
+  { label: 'Granizo', icon: 'snow' },
   { label: 'Lluvia torrencial', icon: 'rainy' },
-  { label: 'Lluvias intermitentes', icon: 'rainy-outline' },
+  { label: 'Lluvias intermitentes', icon: 'water' },
   { label: 'Incendio', icon: 'flame' },
 ];
 
