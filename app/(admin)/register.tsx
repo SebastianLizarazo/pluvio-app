@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Button, Card, Chip, Text, TextInput } from 'react-native-paper';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
@@ -13,6 +14,7 @@ const COLORS = {
   grayLight: '#F5F5F5',
   textPrimary: '#1A1A1A',
   textSecondary: '#888888',
+  textTerciary: '#003D70',
 };
 
 const PRECIPITATION_OPTIONS = [
@@ -27,15 +29,35 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
 
   // Form state
-  const [date, setDate] = useState(new Date().toLocaleDateString('es-ES'));
-  const [time, setTime] = useState(
-    new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-  );
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [noRain, setNoRain] = useState(false);
   const [volumeMl, setVolumeMl] = useState('');
   const [rainfallMm, setRainfallMm] = useState<number | null>(null);
   const [selectedBehaviors, setSelectedBehaviors] = useState<string[]>([]);
   const [observations, setObservations] = useState('');
+
+  // Formatted strings for display
+  const dateDisplay = selectedDate.toLocaleDateString('es-ES');
+  const timeDisplay = selectedTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  // Date picker handler
+  const onDateChange = (_event: DateTimePickerEvent, date?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setSelectedDate(date);
+    }
+  };
+
+  // Time picker handler
+  const onTimeChange = (_event: DateTimePickerEvent, time?: Date) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (time) {
+      setSelectedTime(time);
+    }
+  };
 
   // Calculate time since last measurement
   const hoursSinceLast = latest
@@ -61,8 +83,9 @@ export default function RegisterScreen() {
   }, [volumeMl, noRain]);
 
   const toggleBehavior = (behavior: string) => {
+    // Only one precipitation type can be selected at a time
     setSelectedBehaviors((prev) =>
-      prev.includes(behavior) ? prev.filter((b) => b !== behavior) : [...prev, behavior]
+      prev.includes(behavior) ? [] : [behavior]
     );
   };
 
@@ -101,32 +124,47 @@ export default function RegisterScreen() {
         </View>
       )}
 
-      <Text style={styles.title}>Nuevo registro</Text>
+      <Text style={[styles.title]}>Nuevo registro</Text>
 
       {/* Fecha y Hora */}
       <Card style={styles.card}>
         <Card.Content>
           <Text style={styles.cardLabel}>FECHA Y HORA</Text>
           <View style={styles.dateTimeRow}>
-            <TextInput
-              mode="outlined"
-              label="Fecha"
-              value={date}
-              onChangeText={setDate}
+            <TouchableOpacity
               style={styles.dateInput}
-              outlineColor={COLORS.textSecondary}
-              activeOutlineColor={COLORS.primary}
-            />
-            <TextInput
-              mode="outlined"
-              label="Hora"
-              value={time}
-              onChangeText={setTime}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={styles.dateInputText}>{dateDisplay}</Text>
+              <Ionicons name="calendar-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.timeInput}
-              outlineColor={COLORS.textSecondary}
-              activeOutlineColor={COLORS.primary}
-            />
+              onPress={() => setShowTimePicker(true)}
+            >
+              <Text style={styles.dateInputText}>{timeDisplay}</Text>
+              <Ionicons name="time-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+            </TouchableOpacity>
           </View>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display="default"
+              onChange={onDateChange}
+              maximumDate={new Date()}
+            />
+          )}
+
+          {showTimePicker && (
+            <DateTimePicker
+              value={selectedTime}
+              mode="time"
+              display="default"
+              onChange={onTimeChange}
+            />
+          )}
         </Card.Content>
       </Card>
 
@@ -165,6 +203,7 @@ export default function RegisterScreen() {
               onChangeText={setVolumeMl}
               keyboardType="numeric"
               style={styles.input}
+              textColor={COLORS.textPrimary}
               outlineColor={COLORS.textSecondary}
               activeOutlineColor={COLORS.primary}
             />
@@ -184,18 +223,25 @@ export default function RegisterScreen() {
         <Card.Content>
           <Text style={styles.cardLabel}>TIPO DE PRECIPITACIÓN</Text>
           <View style={styles.chipsContainer}>
-            {PRECIPITATION_OPTIONS.map((option) => (
-              <Chip
-                key={option.label}
-                icon={() => <Ionicons name={option.icon as any} size={16} color={COLORS.primary} />}
-                selected={selectedBehaviors.includes(option.label)}
-                onPress={() => toggleBehavior(option.label)}
-                style={styles.chip}
-                selectedColor={COLORS.primary}
-              >
-                {option.label}
-              </Chip>
-            ))}
+            {PRECIPITATION_OPTIONS.map((option) => {
+              const isSelected = selectedBehaviors.includes(option.label);
+              return (
+                <TouchableOpacity
+                  key={option.label}
+                  style={[styles.chip, isSelected && styles.chipSelected]}
+                  onPress={() => toggleBehavior(option.label)}
+                >
+                  <Ionicons
+                    name={option.icon as any}
+                    size={16}
+                    color={isSelected ? COLORS.white : COLORS.primary}
+                  />
+                  <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </Card.Content>
       </Card>
@@ -212,6 +258,7 @@ export default function RegisterScreen() {
             multiline
             numberOfLines={4}
             style={styles.observationsInput}
+            textColor={COLORS.textPrimary}
             outlineColor={COLORS.textSecondary}
             activeOutlineColor={COLORS.primary}
           />
@@ -247,10 +294,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: COLORS.textTerciary,
   },
   card: {
     borderRadius: 12,
+    backgroundColor: COLORS.grayLight,
   },
   cardLabel: {
     fontSize: 11,
@@ -266,10 +314,33 @@ const styles = StyleSheet.create({
   dateInput: {
     flex: 1,
     backgroundColor: COLORS.white,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: COLORS.textSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   timeInput: {
     width: 100,
     backgroundColor: COLORS.white,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: COLORS.textSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateInputText: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+  },
+  inputIcon: {
+    marginLeft: 8,
   },
   noRainButton: {
     borderRadius: 8,
@@ -288,6 +359,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: COLORS.white,
+    color: COLORS.textPrimary,
   },
   calculatedContainer: {
     flexDirection: 'row',
@@ -314,9 +386,28 @@ const styles = StyleSheet.create({
   },
   chip: {
     backgroundColor: COLORS.white,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  chipSelected: {
+    backgroundColor: COLORS.primary,
+  },
+  chipText: {
+    fontSize: 13,
+    color: COLORS.primary,
+  },
+  chipTextSelected: {
+    color: COLORS.white,
   },
   observationsInput: {
     backgroundColor: COLORS.white,
+    color: COLORS.textPrimary,
   },
   saveButton: {
     borderRadius: 8,

@@ -8,6 +8,7 @@ import { useAppSession } from '@/hooks/useAppSession';
 const COLORS = {
   primary: '#003D70',
   white: '#F8F9FA',
+  grayLight: '#F5F5F5',
   textPrimary: '#1A1A1A',
   textSecondary: '#888888',
 };
@@ -71,6 +72,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 12,
+    backgroundColor: COLORS.grayLight,
   },
   cardTitle: {
     fontSize: 16,
