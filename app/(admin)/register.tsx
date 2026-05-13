@@ -4,7 +4,13 @@ import { Button, Card, Chip, Text, TextInput } from 'react-native-paper';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 
+import { insertLocalMeasurement } from '@/lib/sqlite';
+import { syncPendingMeasurements } from '@/lib/sync';
+import { useAppSession } from '@/hooks/useAppSession';
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
+import { useSupabaseClient } from '@/hooks/useSupabaseClient';
+
+const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 const COLORS = {
   primary: '#003D70',
@@ -25,7 +31,9 @@ const PRECIPITATION_OPTIONS = [
 ];
 
 export default function RegisterScreen() {
+  const { appUser, userId } = useAppSession();
   const { latest } = useUserMeasurements();
+  const supabaseClient = useSupabaseClient();
   const [loading, setLoading] = useState(false);
 
   // Form state
@@ -97,7 +105,49 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      // TODO: Save to SQLite + sync
+      const pluviometerId = appUser?.pluviometerId ?? '';
+      if (!pluviometerId) {
+        Alert.alert('Error', 'No tienes un pluviómetro configurado.');
+        setLoading(false);
+        return;
+      }
+
+      // Combine date and time into measuredAt
+      const measuredAt = new Date(selectedDate);
+      measuredAt.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+
+      // Calculate elapsed minutes from latest measurement
+      const elapsedMinutes = latest
+        ? Math.round((measuredAt.getTime() - new Date(latest.measuredAt).getTime()) / 60000)
+        : null;
+
+      // Create measurement object
+      const now = new Date().toISOString();
+      const measurement = {
+        id: generateId(),
+        userId: userId as string,
+        pluviometerId,
+        measuredAt: measuredAt.toISOString(),
+        volumeMl: noRain ? null : parseFloat(volumeMl),
+        rainfallMm: rainfallMm ?? 0,
+        noRain,
+        elapsedMinutes,
+        observations: observations.trim() || null,
+        behaviors: selectedBehaviors as any,
+        synced: false,
+        localId: generateId(),
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      // Save to SQLite
+      insertLocalMeasurement(measurement);
+
+      // Sync to Supabase in background
+      syncPendingMeasurements(supabaseClient, userId as string).catch((err) => {
+        console.warn('Sync failed, will retry later:', err);
+      });
+
       Alert.alert('Éxito', 'Registro guardado correctamente.');
       // Reset form
       setVolumeMl('');
@@ -105,6 +155,8 @@ export default function RegisterScreen() {
       setSelectedBehaviors([]);
       setObservations('');
       setNoRain(false);
+      setSelectedDate(new Date());
+      setSelectedTime(new Date());
     } catch (error) {
       Alert.alert('Error', 'No se pudo guardar el registro.');
     } finally {

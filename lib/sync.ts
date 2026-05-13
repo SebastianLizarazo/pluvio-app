@@ -72,33 +72,82 @@ const syncBatch = async (
     return toMarkAsSynced.length;
   }
 
-  const payload = toUpload.map((item) => ({
-    id: item.id,
-    user_id: item.userId,
-    pluviometer_id: item.pluviometerId,
-    measured_at: item.measuredAt,
-    volume_ml: item.volumeMl,
-    rainfall_mm: item.rainfallMm,
-    no_rain: item.noRain,
-    elapsed_minutes: item.elapsedMinutes,
-    observations: item.observations,
-    behaviors: item.behaviors,
-    synced: true,
-    local_id: item.localId,
-    created_at: item.createdAt,
-    updated_at: item.updatedAt,
-  }));
+  // Try Edge Function first (bypasses RLS via service_role)
+  // Fallback to direct client upsert if Edge Function fails
+  let uploadedCount = 0;
+  const uploadedIds: string[] = [];
 
-  const { error } = await supabaseClient
-    .from('measurements')
-    .upsert(payload, { onConflict: 'local_id', ignoreDuplicates: false });
+  try {
+    const edgePayload = toUpload.map((item) => ({
+      id: item.id,
+      userId: item.userId,
+      pluviometerId: item.pluviometerId,
+      measuredAt: item.measuredAt,
+      volumeMl: item.volumeMl,
+      rainfallMm: item.rainfallMm,
+      noRain: item.noRain,
+      elapsedMinutes: item.elapsedMinutes,
+      observations: item.observations,
+      behaviors: item.behaviors,
+      localId: item.localId,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
 
-  if (error) {
-    throw error;
+    const { data: edgeResult, error: edgeError } = await supabaseClient.functions.invoke(
+      'sync-measurements',
+      { body: { measurements: edgePayload } },
+    );
+
+    if (!edgeError && edgeResult && typeof edgeResult === 'object' && 'ok' in edgeResult) {
+      const result = edgeResult as { ok: boolean; synced?: number };
+      if (result.ok && result.synced !== undefined) {
+        uploadedCount = result.synced;
+        uploadedIds.push(...toUpload.map((item) => item.id));
+      } else {
+        throw new Error('Edge function returned not ok');
+      }
+    } else if (edgeError) {
+      throw edgeError;
+    } else {
+      throw new Error('Unexpected edge function response');
+    }
+  } catch {
+    // Fallback: direct upsert via client (RLS will apply, may fail for some cases)
+    const payload = toUpload.map((item) => ({
+      id: item.id,
+      user_id: item.userId,
+      pluviometer_id: item.pluviometerId,
+      measured_at: item.measuredAt,
+      volume_ml: item.volumeMl,
+      rainfall_mm: item.rainfallMm,
+      no_rain: item.noRain,
+      elapsed_minutes: item.elapsedMinutes,
+      observations: item.observations,
+      behaviors: item.behaviors,
+      synced: true,
+      local_id: item.localId,
+      created_at: item.createdAt,
+      updated_at: item.updatedAt,
+    }));
+
+    const { error } = await supabaseClient
+      .from('measurements')
+      .upsert(payload, { onConflict: 'id', ignoreDuplicates: false });
+
+    if (error) {
+      throw error;
+    }
+
+    uploadedCount = toUpload.length;
+    uploadedIds.push(...toUpload.map((item) => item.id));
   }
 
-  markMeasurementsAsSynced(toUpload.map((item) => item.id));
-  return toUpload.length + toMarkAsSynced.length;
+  if (uploadedIds.length) {
+    markMeasurementsAsSynced(uploadedIds);
+  }
+
+  return uploadedCount + toMarkAsSynced.length;
 };
 
 export const syncPendingMeasurements = async (

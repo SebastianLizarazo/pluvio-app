@@ -54,6 +54,8 @@ export const useAppSession = () => {
   const query = useQuery({
     queryKey: ['app-session', userId],
     enabled: sessionChecked && isSignedIn && Boolean(userId),
+    staleTime: 0,
+    refetchOnMount: true,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('app_users')
