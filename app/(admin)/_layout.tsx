@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppSession } from '@/hooks/useAppSession';
+import { usePushTokenRegistration } from '@/hooks/usePushTokenRegistration';
 
 const COLORS = {
   primary: '#003D70',
@@ -57,6 +58,9 @@ const screenOptions = {
 
 export default function AdminLayout() {
   const { isAuthReady, isSignedIn, isLoading } = useAppSession();
+
+  // Register push token and manage daily reminders
+  usePushTokenRegistration();
 
   if (!isAuthReady || (isSignedIn && isLoading)) {
     return <ActivityIndicator style={{ flex: 1 }} />;

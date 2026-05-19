@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Switch, Text } from 'react-native-paper';
 
 import { supabase } from '@/lib/supabase';
 import { useAppSession } from '@/hooks/useAppSession';
+import { useDailyReminder } from '@/hooks/useDailyReminder';
+import { requestNotificationPermission, cancelDailyReminder } from '@/lib/notifications';
 
 const COLORS = {
   primary: '#003D70',
@@ -15,7 +17,39 @@ const COLORS = {
 
 export default function ProfileScreen() {
   const { appUser } = useAppSession();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(appUser?.notificationsEnabled ?? false);
+  const [saving, setSaving] = useState(false);
+
+  // Wire up daily reminder based on toggle
+  useDailyReminder(notificationsEnabled);
+
+  const handleToggleNotifications = async (value: boolean) => {
+    setSaving(true);
+    try {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        Alert.alert('Permiso requerido', 'No se pudo habilitar las notificaciones.');
+        return;
+      }
+
+      if (!value) {
+        await cancelDailyReminder();
+      }
+
+      const { error } = await supabase
+        .from('app_users')
+        .update({ notifications_enabled: value })
+        .eq('id', appUser?.id);
+
+      if (error) throw error;
+
+      setNotificationsEnabled(value);
+    } catch (err) {
+      Alert.alert('Error', 'No se pudo actualizar la configuración.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const onSignOut = async () => {
     try {
@@ -40,7 +74,11 @@ export default function ProfileScreen() {
           <Text style={styles.cardTitle}>Configuración</Text>
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Notificaciones</Text>
-            <Switch value={notificationsEnabled} onValueChange={setNotificationsEnabled} />
+            <Switch
+              value={notificationsEnabled}
+              onValueChange={handleToggleNotifications}
+              disabled={saving}
+            />
           </View>
         </Card.Content>
       </Card>

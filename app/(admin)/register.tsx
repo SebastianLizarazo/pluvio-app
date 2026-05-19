@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Button, Card, Chip, Text, TextInput } from 'react-native-paper';
+import { Button, Card, Chip, Text, TextInput, Snackbar } from 'react-native-paper';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import * as Crypto from 'expo-crypto';
 
 import { insertLocalMeasurement } from '@/lib/sqlite';
@@ -34,10 +36,13 @@ const PRECIPITATION_OPTIONS = [
 ];
 
 export default function RegisterScreen() {
+  const router = useRouter();
   const { appUser, userId } = useAppSession();
   const { latest } = useUserMeasurements();
   const supabaseClient = useSupabaseClient();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   // Form state
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -146,20 +151,19 @@ export default function RegisterScreen() {
       // Save to SQLite
       insertLocalMeasurement(measurement);
 
+      // Invalidate measurements cache so dashboard updates
+      queryClient.invalidateQueries({ queryKey: ['user-measurements', userId as string] });
+
       // Sync to Supabase in background
       syncPendingMeasurements(supabaseClient, userId as string).catch((err) => {
         console.warn('Sync failed, will retry later:', err);
       });
 
-      Alert.alert('Éxito', 'Registro guardado correctamente.');
-      // Reset form
-      setVolumeMl('');
-      setRainfallMm(null);
-      setSelectedBehaviors([]);
-      setObservations('');
-      setNoRain(false);
-      setSelectedDate(new Date());
-      setSelectedTime(new Date());
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        router.push('/(admin)');
+      }, 1500);
     } catch (error) {
       console.warn('[register] onSave error:', error);
       Alert.alert('Error', 'No se pudo guardar el registro.');
@@ -334,6 +338,19 @@ export default function RegisterScreen() {
       >
         Guardar registro
       </Button>
+
+      {/* Success Snackbar */}
+      <Snackbar
+        visible={showSuccess}
+        onDismiss={() => setShowSuccess(false)}
+        duration={1500}
+        style={styles.successSnackbar}
+      >
+        <View style={styles.successContent}>
+          <Ionicons name="checkmark-circle" size={22} color={COLORS.white} />
+          <Text style={styles.successText}>Registro guardado correctamente</Text>
+        </View>
+      </Snackbar>
     </ScrollView>
   );
 }
@@ -484,5 +501,19 @@ const styles = StyleSheet.create({
     color: COLORS.green,
     fontSize: 14,
     fontWeight: '500',
+  },
+  successSnackbar: {
+    backgroundColor: COLORS.green,
+    borderRadius: 8,
+  },
+  successContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  successText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

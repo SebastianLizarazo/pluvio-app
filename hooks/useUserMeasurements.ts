@@ -49,6 +49,8 @@ export const useUserMeasurements = () => {
   const query = useQuery({
     queryKey: ['user-measurements', userId],
     enabled: Boolean(userId),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    refetchOnMount: true,
     queryFn: async () => {
       const local = getLocalMeasurementsByUser(userId as string);
 
