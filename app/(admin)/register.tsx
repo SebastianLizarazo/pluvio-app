@@ -3,6 +3,7 @@ import { Alert, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 
 import { Button, Card, Chip, Text, TextInput } from 'react-native-paper';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import * as Crypto from 'expo-crypto';
 
 import { insertLocalMeasurement } from '@/lib/sqlite';
 import { syncPendingMeasurements } from '@/lib/sync';
@@ -10,7 +11,9 @@ import { useAppSession } from '@/hooks/useAppSession';
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
 import { useSupabaseClient } from '@/hooks/useSupabaseClient';
 
-const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const generateId = (): string => {
+  return Crypto.randomUUID();
+};
 
 const COLORS = {
   primary: '#003D70',
@@ -158,6 +161,7 @@ export default function RegisterScreen() {
       setSelectedDate(new Date());
       setSelectedTime(new Date());
     } catch (error) {
+      console.warn('[register] onSave error:', error);
       Alert.alert('Error', 'No se pudo guardar el registro.');
     } finally {
       setLoading(false);

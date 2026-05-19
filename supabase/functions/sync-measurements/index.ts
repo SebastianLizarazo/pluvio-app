@@ -1,16 +1,15 @@
 import { corsHeaders } from '../_shared/cors.ts';
+import { requireServiceRole } from '../_shared/auth.ts';
 import { createServiceClient } from '../_shared/supabase.ts';
 
 /**
  * sync-measurements Edge Function
  *
- * Receives an array of measurements from a trusted source (admin/service_role)
- * and upserts them into Supabase. Used for bulk sync operations where the client
- * cannot directly upsert due to RLS constraints on local_id conflicts.
+ * Receives an array of measurements and upserts them into Supabase using
+ * service_role (bypasses RLS). This is called by the sync.ts client when
+ * local measurements need to be uploaded to the cloud.
  *
- * IMPORTANT: This function requires service_role authorization.
- * Clients should NOT call this directly — use sync.ts which uses the user's
- * authenticated context and RLS policies instead.
+ * Authorization: requires SUPABASE_SERVICE_ROLE_KEY bearer token.
  */
 
 type MeasurementInput = {
@@ -39,7 +38,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const auth = await requireAdminOrServiceRole(req);
+    const auth = await requireServiceRole(req);
     if (!auth.ok) {
       return auth.response;
     }
@@ -71,9 +70,18 @@ Deno.serve(async (req) => {
     // For now, we'll insert with service role and let RLS policies handle validation on reads
     // But we need to ensure the user_id matches the token's sub claim
 
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
     const results: { id: string; ok: boolean; error?: string }[] = [];
 
     for (const measurement of body.measurements) {
+      // Validate UUID format - skip records with invalid IDs
+      if (!UUID_REGEX.test(measurement.id)) {
+        console.error('Invalid UUID skipped:', measurement.id);
+        results.push({ id: measurement.id, ok: false, error: 'invalid_uuid_format' });
+        continue;
+      }
+
       try {
         // Upsert measurement - use id as primary key, local_id for conflict resolution
         const { error } = await supabase.from('measurements').upsert(

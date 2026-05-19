@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Card, Text } from 'react-native-paper';
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Card, Text, ActivityIndicator } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAppSession } from '@/hooks/useAppSession';
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
+import { useSupabaseClient } from '@/hooks/useSupabaseClient';
+import { syncPendingMeasurements } from '@/lib/sync';
 import { TANK_DEFAULT_LIMITS } from '@/constants/app';
 
 type TankPeriod = 'day' | 'month' | 'semester';
@@ -22,9 +24,28 @@ const COLORS = {
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
-  const { appUser } = useAppSession();
+  const { appUser, userId } = useAppSession();
+  const supabaseClient = useSupabaseClient();
   const [tankPeriod, setTankPeriod] = useState<TankPeriod>('day');
+  const [syncLoading, setSyncLoading] = useState(false);
   const { todayMeasurements, todayTotalMm, monthTotalMm, semesterTotalMm, latest } = useUserMeasurements();
+
+  const handleForceSync = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'No hay usuario logueado');
+      return;
+    }
+    setSyncLoading(true);
+    try {
+      const result = await syncPendingMeasurements(supabaseClient, userId);
+      Alert.alert('Sync', `Sincronizados: ${result.syncedCount} registro(s)`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : JSON.stringify(err);
+      Alert.alert('Sync Error', msg);
+    } finally {
+      setSyncLoading(false);
+    }
+  };
 
   const diameterCm = 20; // TODO: from pluviometer config
   const hasTodayRecord = todayMeasurements.length > 0;
@@ -165,6 +186,22 @@ export default function AdminDashboardScreen() {
           </View>
         </Card.Content>
       </Card>
+
+      {/* Debug: Force Sync Button */}
+      <TouchableOpacity
+        style={[styles.syncButton, syncLoading && styles.syncButtonDisabled]}
+        onPress={handleForceSync}
+        disabled={syncLoading}
+      >
+        {syncLoading ? (
+          <ActivityIndicator size="small" color={COLORS.white} />
+        ) : (
+          <>
+            <Ionicons name="cloud-upload" size={18} color={COLORS.white} />
+            <Text style={styles.syncButtonText}>Forzar Sync a Supabase</Text>
+          </>
+        )}
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -344,5 +381,22 @@ const styles = StyleSheet.create({
   measurementTime: {
     fontSize: 12,
     color: COLORS.textSecondary,
+  },
+  syncButton: {
+    backgroundColor: COLORS.chartBlue,
+    borderRadius: 30,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  syncButtonDisabled: {
+    opacity: 0.6,
+  },
+  syncButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

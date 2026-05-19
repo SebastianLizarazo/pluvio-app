@@ -28,6 +28,26 @@ const getBearerToken = (req: Request): string | null => {
   return token;
 };
 
+const jsonError = (status: number, error: string) =>
+  new Response(JSON.stringify({ ok: false, error }), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+
+export const requireServiceRole = async (req: Request): Promise<{ ok: true } | { ok: false; response: Response }> => {
+  const token = getBearerToken(req);
+  if (!token) {
+    return { ok: false, response: jsonError(401, 'missing_authorization_bearer') };
+  }
+
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!serviceRoleKey || token !== serviceRoleKey) {
+    return { ok: false, response: jsonError(403, 'service_role_required') };
+  }
+
+  return { ok: true };
+};
+
 const decodeJwtPayload = (token: string): Record<string, unknown> => {
   const payload = token.split('.')[1];
   if (!payload) throw new Error('invalid_jwt_payload');

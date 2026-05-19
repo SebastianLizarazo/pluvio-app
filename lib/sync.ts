@@ -1,5 +1,6 @@
 import NetInfo from '@react-native-community/netinfo';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import * as Crypto from 'expo-crypto';
 
 import { logAdminAction } from '@/lib/admin-audit';
 import { Sentry } from '@/lib/sentry';
@@ -9,6 +10,10 @@ import type { Json } from '@/types/database';
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const BACKOFF_MS = [5000, 15000, 45000] as const;
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isValidUuid = (id: string): boolean => UUID_REGEX.test(id);
 
 const syncBatch = async (
   supabaseClient: SupabaseClient,
@@ -21,8 +26,12 @@ const syncBatch = async (
   const toMarkAsSynced: string[] = [];
 
   for (const localItem of pending) {
+    // If the local ID is not a valid UUID, generate a new one for the upsert
+    const effectiveId = isValidUuid(localItem.id) ? localItem.id : Crypto.randomUUID();
+    const itemWithValidId = { ...localItem, id: effectiveId };
+
     if (!localItem.localId) {
-      toUpload.push(localItem);
+      toUpload.push(itemWithValidId);
       continue;
     }
 
@@ -37,7 +46,7 @@ const syncBatch = async (
     }
 
     if (!remote) {
-      toUpload.push(localItem);
+      toUpload.push(itemWithValidId);
       continue;
     }
 
@@ -45,7 +54,7 @@ const syncBatch = async (
     const remoteUpdatedAt = new Date(remote.updated_at as string).getTime();
 
     if (localUpdatedAt > remoteUpdatedAt) {
-      toUpload.push(localItem);
+      toUpload.push(itemWithValidId);
     } else {
       toMarkAsSynced.push(localItem.id);
       await logAdminAction(

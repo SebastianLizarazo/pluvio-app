@@ -329,11 +329,11 @@ create policy "measurements_own_delete_or_admin"
 on public.measurements for delete
 using (user_id = public.current_user_id() or public.current_user_role() = 'admin');
 
--- monthly_totals policies
-drop policy if exists "monthly_totals_own_or_admin_select" on public.monthly_totals;
-create policy "monthly_totals_own_or_admin_select"
-on public.monthly_totals for select
-using (
+-- monthly_totals policies (insert/update for trigger support)
+drop policy if exists "monthly_totals_admin_write" on public.monthly_totals;
+create policy "monthly_totals_own_insert"
+on public.monthly_totals for insert
+with check (
   public.current_user_role() = 'admin'
   or exists (
     select 1 from public.pluviometers p
@@ -342,11 +342,17 @@ using (
   )
 );
 
-drop policy if exists "monthly_totals_admin_write" on public.monthly_totals;
-create policy "monthly_totals_admin_write"
-on public.monthly_totals for all
-using (public.current_user_role() = 'admin')
-with check (public.current_user_role() = 'admin');
+drop policy if exists "monthly_totals_own_update" on public.monthly_totals;
+create policy "monthly_totals_own_update"
+on public.monthly_totals for update
+using (
+  public.current_user_role() = 'admin'
+  or exists (
+    select 1 from public.pluviometers p
+    where p.id = monthly_totals.pluviometer_id
+      and p.user_id = public.current_user_id()
+  )
+);
 
 -- audit_log policies
 drop policy if exists "audit_log_admin_rw" on public.audit_log;
