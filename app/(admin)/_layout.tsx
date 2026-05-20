@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useAppSession } from '@/hooks/useAppSession';
 import { usePushTokenRegistration } from '@/hooks/usePushTokenRegistration';
+import { useNotificationsCenter } from '@/hooks/useNotificationsCenter';
 
 const COLORS = {
   primary: '#003D70',
@@ -19,7 +20,7 @@ const COLORS = {
 
 function HeaderRight() {
   const router = useRouter();
-  const unreadCount = 0; // TODO: connect to notifications hook
+  const { unreadCount } = useNotificationsCenter();
 
   return (
     <TouchableOpacity onPress={() => router.push('/(admin)/notifications' as any)} style={styles.headerButton}>

@@ -1,4 +1,11 @@
+import { Platform } from 'react-native';
+
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
+
+const isExpoGoAndroid =
+  Platform.OS === 'android' &&
+  (Constants.executionEnvironment === 'storeClient' || Constants.appOwnership === 'expo');
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -14,6 +21,9 @@ const DAILY_REMINDER_10PM_ID = 'pluvio-daily-reminder-22';
 const DAILY_REMINDER_11PM_ID = 'pluvio-daily-reminder-23';
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
+  // En Expo Go Android, las push remotas no están soportadas; se omite.
+  if (isExpoGoAndroid) return false;
+
   const settings = await Notifications.getPermissionsAsync();
   if (settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
     return true;
@@ -24,11 +34,16 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 };
 
 export const cancelDailyReminder = async (): Promise<void> => {
+  // En Expo Go Android no hay soporte de notificaciones locales.
+  if (isExpoGoAndroid) return;
   await Notifications.cancelScheduledNotificationAsync(DAILY_REMINDER_10PM_ID).catch(() => {});
   await Notifications.cancelScheduledNotificationAsync(DAILY_REMINDER_11PM_ID).catch(() => {});
 };
 
 export const scheduleDailyReminder = async (): Promise<void> => {
+  // En Expo Go Android no hay soporte de notificaciones locales.
+  if (isExpoGoAndroid) return;
+
   await cancelDailyReminder();
 
   await Notifications.scheduleNotificationAsync({

@@ -1,12 +1,9 @@
-import { useState, useCallback } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { Card, Text, TouchableRipple } from 'react-native-paper';
+import { Text, TouchableRipple } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
 
-import { useAppSession } from '@/hooks/useAppSession';
-import { useSupabaseClient } from '@/hooks/useSupabaseClient';
-import type { NotificationItem } from '@/types/domain';
+import { useNotificationsCenter } from '@/hooks/useNotificationsCenter';
+import type { AppNotification } from '@/hooks/useNotificationsCenter';
 
 const COLORS = {
   primary: '#003D70',
@@ -18,56 +15,15 @@ const COLORS = {
 };
 
 export default function NotificationsScreen() {
-  const { userId } = useAppSession();
-  const supabaseClient = useSupabaseClient();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchNotifications = useCallback(async () => {
-    if (!userId) return;
-
-    setLoading(true);
-    try {
-      const { data, error } = await supabaseClient
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      setNotifications((data as NotificationItem[]) ?? []);
-    } catch {
-      // silent fail
-    } finally {
-      setLoading(false);
-    }
-  }, [userId, supabaseClient]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void fetchNotifications();
-    }, [fetchNotifications]),
-  );
+  const { notificationsQuery, markAsRead } = useNotificationsCenter();
+  const { data: notifications = [], isLoading } = notificationsQuery;
 
   const handleMarkAsRead = async (id: string, read: boolean) => {
-    if (read) return; // already read
-
-    try {
-      await supabaseClient
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', id);
-
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
-      );
-    } catch {
-      // silent fail
-    }
+    if (read) return;
+    await markAsRead.mutateAsync(id);
   };
 
-  const renderItem = ({ item }: { item: NotificationItem }) => (
+  const renderItem = ({ item }: { item: AppNotification }) => (
     <TouchableRipple
       onPress={() => handleMarkAsRead(item.id, item.read)}
       style={[styles.notificationItem, !item.read && styles.notificationUnread]}
@@ -86,7 +42,7 @@ export default function NotificationsScreen() {
           </Text>
           <Text style={styles.notificationBody}>{item.body}</Text>
           <Text style={styles.notificationTime}>
-            {new Date(item.createdAt).toLocaleDateString('es-ES', {
+            {new Date(item.created_at).toLocaleDateString('es-ES', {
               day: 'numeric',
               month: 'short',
               hour: '2-digit',
@@ -115,9 +71,11 @@ export default function NotificationsScreen() {
         data={notifications}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        ListEmptyComponent={!loading ? renderEmpty() : null}
-        contentContainerStyle={notifications.length === 0 && !loading ? styles.emptyList : styles.list}
+        ListEmptyComponent={!isLoading ? renderEmpty() : null}
+        contentContainerStyle={notifications.length === 0 && !isLoading ? styles.emptyList : styles.list}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
+        refreshing={isLoading}
+        onRefresh={notificationsQuery.refetch}
       />
     </View>
   );
