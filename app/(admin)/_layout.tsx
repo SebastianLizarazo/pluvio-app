@@ -104,7 +104,7 @@ export default function AdminLayout() {
         }}
       />
       <Tabs.Screen
-        name="analysis"
+        name="analysis/index"
         options={{
           title: 'Análisis',
           tabBarIcon: ({ color, focused }) => (
