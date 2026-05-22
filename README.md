@@ -1,297 +1,128 @@
 # PluvioApp
 
-Aplicación híbrida (iOS + Android) para registro y análisis de datos pluviométricos.
+Rain measurement tracking MVP for admin users.
 
-## Stack
+## Tech Stack
 
-- React Native + Expo + Expo Router
-- Clerk (autenticación)
-- Supabase (DB + RLS)
-- Sentry (monitoreo)
-- SQLite (offline-first)
-- Zustand + React Query
-- React Native Paper
+- **Expo ~54 / React Native 0.81**
+- **expo-router ~6.0.23** — file-based routing
+- **Supabase** — auth, database, RLS, Edge Functions (NOT Clerk)
+- **react-native-paper 5.15.2** — UI components
+- **react-native-reanimated** — TankBar animation
+- **SQLite (expo-sqlite)** — offline-first local storage
+- **Zustand 5.x + TanStack React Query 5.x** — state management
+- **@react-native-community/netinfo** — connectivity detection
+- **expo-notifications** — local notifications (NOT remote push in Expo Go)
+- **expo-sharing + xlsx** — CSV/XLSX export
+- **@sentry/react-native** — error monitoring
 
-## Variables de entorno
+## Prerequisites
 
-Copiar `.env.example` a `.env` y completar:
+- Node.js 18+
+- pnpm @8.15.9 (minimum)
+- Expo CLI
+- Supabase account (free tier works)
 
-```bash
-EXPO_PUBLIC_SUPABASE_URL=
-EXPO_PUBLIC_SUPABASE_ANON_KEY=
-EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=
-EXPO_PUBLIC_SENTRY_DSN=
-EXPO_PUBLIC_ENV=development
-EXPO_PUBLIC_MAPS_API_KEY=
-```
-
-### Modo demo (sin credenciales reales)
-
-Si solo quieres revisar el estado actual de la UI sin credenciales reales:
-
-1. Copia `.env.example` a `.env`.
-2. Asegúrate de usar `EXPO_PUBLIC_ENV=demo`.
-3. Ejecuta:
+## Quick Setup
 
 ```bash
-npm run start
+# 1. Clone and install
+git clone <repo-url>
+cd pluvio-app
+pnpm install
+
+# 2. Copy and configure environment
+cp .env.example .env
+# Edit .env with your values
+
+# 3. Apply SQL scripts (in order)
+# In Supabase SQL Editor, run:
+# a) sql/supabase-schema.sql
+# b) sql/patch-app-users-rls-self-signup.sql
+# c) sql/bootstrap-admin.sql  (replace placeholders first)
+
+# 4. Start development
+pnpm start
 ```
 
-> En modo demo, autenticación, backend y mapas reales pueden no funcionar o mostrar datos no reales.
+## Package Manager
 
-## Scripts
+**pnpm @8.15.9 is required.** Newer versions have `approve-builds` issues with this project.
+
+In `package.json`, `pnpm.onlyBuiltDependencies` is configured to handle native modules.
+
+## Environment Variables
+
+| Variable | Description |
+|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key (safe for client) |
+| `EXPO_PUBLIC_SENTRY_DSN` | Sentry error tracking endpoint |
+| `EXPO_PUBLIC_ENV` | `development` or `production` |
+| `EXPO_PUBLIC_MAPS_API_KEY` | Google Maps API key (optional) |
+
+## SQL Setup (order matters)
+
+1. **`sql/supabase-schema.sql`** — full DB schema with RLS policies, triggers, tables (`app_users`, `pluviometers`, `measurements`, `monthly_totals`, `audit_log`, `notifications`, `device_tokens`)
+2. **`sql/patch-app-users-rls-self-signup.sql`** — self-signup RLS policy for `app_users`
+3. **`sql/bootstrap-admin.sql`** — create first admin user (UPSERT, idempotent; replace `YOUR_CEDULA`, `YOUR_PASSWORD_HASH`, `YOUR_EMAIL` placeholders first)
+
+## App Structure
+
+```
+app/
+  (auth)/           — sign-in, sign-up flows
+  (admin)/          — protected admin tabs
+    analysis/       — 3-tab section: Panel, Anual, Historial (Calendario + Lista sub-tabs)
+components/         — shared UI (TankBar, MonthBarChart, ProgressBar)
+hooks/              — useUserMeasurements, useAnalytics, usePushTokenRegistration
+lib/                — sync (background sync with exponential backoff), notifications
+supabase/
+  functions/        — Edge Functions (sync-measurements, user-status-notify, _shared)
+  README.md         — Supabase setup guide
+sql/                — schema and bootstrap scripts
+```
+
+## Key Commands
 
 ```bash
-npm run start
-npm run start:tunnel
-npm run android
-npm run ios
-npm run web
-npm run typecheck
+pnpm start          # Start Expo dev server
+pnpm android        # Run on Android device/emulator
+pnpm run typecheck  # TypeScript validation
 ```
-
-### Calidad mínima (sin build)
-
-- `npm run typecheck`: valida tipos TypeScript con `tsc --noEmit`.
-
-> Este proyecto no tiene aún configuración de linter o runner de tests (ESLint/Jest/Vitest), por lo que no se expone `lint`/`test` hasta definir esas bases.
-
-## SQL Supabase
-
-Ejecutar `sql/supabase-schema.sql` en Supabase SQL Editor.
-
-### Bootstrap de admin y patch RLS (`app_users`)
-
-No hardcodees usuarios admin en `sql/supabase-schema.sql`. Usa scripts separados:
-
-1. **Schema base**:
-
-```bash
-# En SQL Editor
-sql/supabase-schema.sql
-```
-
-2. **Patch RLS para auto-registro seguro** (opción A: self-insert):
-
-```bash
-# En SQL Editor
-sql/patch-app-users-rls-self-signup.sql
-```
-
-3. **Bootstrap admin real** (después de reemplazar placeholders):
-
-```bash
-# En SQL Editor
-sql/bootstrap-admin.sql
-```
-
-Orden recomendado: `supabase-schema.sql` → `patch-app-users-rls-self-signup.sql` → `bootstrap-admin.sql`.
-
-### Hardening aplicado (requerido antes de avanzar features)
-
-1. **Un solo admin global**
-   - Se aplica índice único parcial (`ux_app_users_single_admin`) para impedir múltiples usuarios con `role='admin'`.
-
-2. **Self-signup seguro y orden de alta consistente**
-   - `app_users` se inserta como `pending` con `pluviometer_id` nulo.
-   - Luego se crea `pluviometers` y se vincula con RPC `set_my_pluviometer(...)`.
-
-3. **Preferencias de notificación por RPC**
-   - Se usa `set_notifications_enabled(...)` (security definer) para evitar abrir políticas `UPDATE` amplias.
-
-4. **Aislamiento offline por usuario en sync**
-   - La sincronización de pendientes ahora filtra por usuario autenticado (`getPendingMeasurementsByUser`).
-
-5. **Autorización admin en Edge Functions**
-   - `weekly-admin-summary` y `user-status-notify` ahora validan bearer token y rol admin antes de ejecutar operaciones con service role.
-
-Además, en Clerk debes crear un **JWT Template** llamado `supabase` para que la app pueda enviar el token JWT a Supabase desde el cliente móvil.
-
-Incluye:
-
-- Tablas de negocio (`app_users`, `pluviometers`, `measurements`, `monthly_totals`, `audit_log`, `notifications`)
-- Tabla de tokens push (`device_tokens`) para notificaciones remotas
-- Políticas RLS por rol y ownership
-- Trigger para recalcular `monthly_totals`
-
-## Estructura inicial
-
-```txt
-/app
-  /(auth)
-  /(user)
-  /(admin)
-/components
-/hooks
-/stores
-/lib
-/utils
-/constants
-/types
-/sql
-```
-
-## Estado actual
-
-Se completó el setup base y un esqueleto funcional de módulos críticos:
-
-1. Setup inicial Expo + Router + TypeScript strict.
-2. Integración base de Clerk, Supabase y Sentry.
-3. Diseño inicial offline-first con SQLite + sincronización por lotes + backoff.
-4. Pantallas base de autenticación, dashboard usuario y panel administrador.
-5. Script SQL completo con RLS y trigger de acumulados mensuales.
-6. Guards de navegación por rol/estado consultando `app_users` (fuente de verdad en servidor).
-7. Registro de medición conectado a usuario/pluviómetro reales (sin mocks).
-8. Sync offline con política base last-write-wins por `updated_at` y auditoría de conflictos.
-
-Siguientes pasos: conectar cada pantalla con datos reales, implementar edge functions (emails/resúmenes), notificaciones remotas y exportación con preview completo.
 
 ## Edge Functions
 
-Se añadieron funciones en `supabase/functions/`:
+Located in `supabase/functions/`:
 
-- `weekly-admin-summary`
-- `user-status-notify`
+- **`sync-measurements`** — syncs local SQLite measurements to Supabase (service_role bypasses RLS)
+- **`user-status-notify`** — sends push + email on account approve/reject
+- **`_shared/`** — shared auth, notify, Supabase client utilities
 
-Revisar `supabase/functions/README.md` para secrets y payload.
+Deploy with: `pnpm supabase:functions:deploy`
 
-Incluye scripts útiles:
+See `supabase/README.md` for secrets setup.
 
-```bash
-npm run supabase:functions:serve
-npm run supabase:functions:deploy
-npm run supabase:functions:logs
-```
+## Local Notifications
 
-Setup local rápido para Functions:
+Uses `expo-notifications` for local daily reminders (scheduled at 22:00 and 23:00).
 
-1. Copia `.env.local.example` a `.env.local`.
-2. Completa `SUPABASE_PROJECT_REF` y secrets requeridos.
-3. Exporta `SUPABASE_PROJECT_REF` en tu shell para deploy/logs remotos.
-4. Levanta funciones localmente:
+**Expo Go Android limitation:** Remote push notifications do NOT work in Expo Go on Android. Local notifications work fine. For remote push on Android, a Dev Build is required.
 
-```bash
-npm run supabase:functions:serve
-```
+## Current State
 
-5. Deploy remoto (requiere `SUPABASE_PROJECT_REF`):
+Implemented:
+- Supabase Auth with `cedula@pluvio.app` format (cedula = document ID as email)
+- SQLite offline-first with `measurements` table
+- Background sync with exponential backoff (5s → 15s → 45s)
+- Admin dashboard with tabs: Inicio, Registrar, Mapa, Análisis, Perfil
+- Analysis section with Panel, Anual, Historial sub-tabs
+- TankBar animation, MonthBarChart, ProgressBar pure RN components
+- Monthly/daily aggregations with dry/wet season detection (60mm threshold)
+- CSV/XLSX export via expo-sharing + xlsx
+- Push token registration to `device_tokens` table
+- Sentry monitoring configured
 
-```bash
-npm run supabase:functions:deploy
-```
-
-6. Consulta logs del proyecto remoto (requiere `SUPABASE_PROJECT_REF` en entorno):
-
-```bash
-npm run supabase:functions:logs
-```
-
-> Si tu versión de Supabase CLI no soporta logs por terminal, el script abre/indica el Dashboard de Functions.
-
-## Pruebas en celular real (antes de desplegar)
-
-### Opción A — Expo Go (rápida para QA funcional)
-
-> Ideal para validar flujos (login, registro, dashboard, etc.) antes de release.
-
-1. Instala **Expo Go** en tu celular:
-   - Android: Play Store
-   - iOS: App Store
-2. En tu PC, ejecuta:
-
-```bash
-npm run start
-```
-
-3. Escanea el QR:
-   - Android: desde Expo Go
-   - iOS: cámara o Expo Go
-4. Si no conecta por red local, usa túnel:
-
-```bash
-npm run start:tunnel
-```
-
-#### Requisitos de conexión
-
-- PC y celular en la misma Wi‑Fi (si usas LAN)
-- Firewall permitiendo Node/Expo
-- VPN desactivada (si rompe descubrimiento local)
-
-### Opción B — Android por USB (más estable)
-
-1. Activa **Opciones de desarrollador** + **Depuración USB** en Android.
-2. Conecta el cable USB.
-3. Verifica dispositivo:
-
-```bash
-adb devices
-```
-
-4. Ejecuta la app en Android:
-
-```bash
-npm run android
-```
-
-### Opción C — Dev Build (recomendado para validación pre-producción)
-
-Usa Dev Build cuando dependencias nativas no estén soportadas en Expo Go o quieras validar comportamiento más cercano a producción.
-
-Ejemplo:
-
-```bash
-npx expo prebuild
-npx expo run:android
-```
-
-En iOS necesitas macOS para build local nativo.
-
-## Checklist de release (staging / producción)
-
-### 1) Configuración y secretos
-
-- [ ] `.env` correcto para el ambiente objetivo
-- [ ] Clerk JWT template `supabase` configurado
-- [ ] Secrets de funciones cargados en Supabase:
-  - [ ] `SUPABASE_URL`
-  - [ ] `SUPABASE_SERVICE_ROLE_KEY`
-  - [ ] `RESEND_API_KEY`
-  - [ ] `RESEND_FROM`
-- [ ] `EXPO_PUBLIC_SENTRY_DSN` y `EXPO_PUBLIC_ENV` correctos
-
-### 2) Base de datos y seguridad
-
-- [ ] `sql/supabase-schema.sql` aplicado en el entorno objetivo
-- [ ] RLS validado con usuario `user` y `admin`
-- [ ] Trigger de `monthly_totals` verificado
-
-### 3) Edge Functions
-
-- [ ] Deploy de funciones:
-
-```bash
-npm run supabase:functions:deploy
-```
-
-- [ ] Scheduler semanal activo para `weekly-admin-summary`
-- [ ] Prueba manual de `user-status-notify` y revisión de logs
-
-### 4) Pruebas funcionales mínimas (smoke test)
-
-- [ ] Registro + login + recuperación
-- [ ] Flujo pending/active/inactive
-- [ ] Registro de medición offline y sincronización online
-- [ ] Dashboard, historial, mapa, análisis
-- [ ] Exportación CSV/XLSX
-- [ ] Notificaciones locales + centro in-app
-- [ ] Acciones admin (aprobar/rechazar/eliminar) + auditoría
-
-### 5) Observabilidad y rollback
-
-- [ ] Sentry recibiendo eventos del ambiente correcto
-- [ ] Logs de funciones sin errores críticos
-- [ ] Plan de rollback definido:
-  - [ ] revertir deploy de funciones
-  - [ ] revertir cambios SQL en ventana controlada
-  - [ ] deshabilitar scheduler temporalmente si hay incidentes
+Not yet implemented:
+- Remote push notifications (requires Dev Build)
+- Full test coverage
