@@ -3,7 +3,6 @@ import Constants from 'expo-constants';
 type ExtraConfig = {
   supabaseUrl?: string;
   supabaseAnonKey?: string;
-  clerkPublishableKey?: string;
   sentryDsn?: string;
   mapsApiKey?: string;
   env?: string;
@@ -45,11 +44,6 @@ export const env = {
     extra.supabaseAnonKey,
     'EXPO_PUBLIC_SUPABASE_ANON_KEY',
     'demo-anon-key',
-  ),
-  clerkPublishableKey: required(
-    extra.clerkPublishableKey,
-    'EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY',
-    'pk_test_demo',
   ),
   sentryDsn: required(
     extra.sentryDsn,
