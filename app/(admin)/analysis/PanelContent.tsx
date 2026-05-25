@@ -153,18 +153,6 @@ export function PanelContent() {
           </View>
         </Card.Content>
       </Card>
-
-      <View style={styles.chipsRow}>
-        <TouchableOpacity style={styles.chip}>
-          <Text style={styles.chipText}>🕐 Histórico</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.chip}>
-          <Text style={styles.chipText}>📊 Predictivo</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.chip}>
-          <Text style={styles.chipText}>💧 Hidrología</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -283,20 +271,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textPrimary,
     flex: 1,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  chip: {
-    backgroundColor: COLORS.grayLight,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  chipText: {
-    fontSize: 13,
-    color: COLORS.textPrimary,
   },
 });

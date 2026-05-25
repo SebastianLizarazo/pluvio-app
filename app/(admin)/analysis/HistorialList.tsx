@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Modal } from 'react-native';
 import { Text, Card } from 'react-native-paper';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
@@ -13,6 +14,8 @@ const COLORS = {
   textPrimary: '#1A1A1A',
   textSecondary: '#888888',
   white: '#FFFFFF',
+  green: '#2DB87B',
+  orange: '#FF9800',
 };
 
 const MONTH_FULL_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -21,6 +24,12 @@ export function HistorialList() {
   const { data: measurements = [] } = useUserMeasurements();
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
+  const [precipitationType, setPrecipitationType] = useState<string | null>(null);
+  const [startHour, setStartHour] = useState('00');
+  const [endHour, setEndHour] = useState('23');
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const PAGE_SIZE = 20;
 
   const currentYear = new Date().getFullYear();
@@ -57,10 +66,49 @@ export function HistorialList() {
   }, [maxDayInMonth]);
 
   const filteredMeasurements = useMemo(() => {
-    if (!searchQuery.trim()) return monthMeasurements;
-    const q = searchQuery.toLowerCase();
-    return monthMeasurements.filter((m) => toIsoDate(new Date(m.measuredAt)).includes(q));
-  }, [monthMeasurements, searchQuery]);
+    let filtered = monthMeasurements;
+
+    // Filtro por búsqueda
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter((m) => {
+        const dateStr = toIsoDate(new Date(m.measuredAt)).toLowerCase();
+        const obsStr = (m.observations || '').toLowerCase();
+        const timeStr = new Date(m.measuredAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }).toLowerCase();
+        return dateStr.includes(q) || obsStr.includes(q) || timeStr.includes(q);
+      });
+    }
+
+    // Filtro por fecha específica
+    if (selectedDate) {
+      const selectedDateStr = toIsoDate(selectedDate);
+      filtered = filtered.filter((m) => {
+        const measurementDateStr = toIsoDate(new Date(m.measuredAt));
+        return measurementDateStr === selectedDateStr;
+      });
+    }
+
+    // Filtro por tipo de precipitación
+    if (precipitationType) {
+      filtered = filtered.filter((m) => {
+        if (precipitationType === 'dry') return m.rainfallMm === 0 || m.noRain;
+        if (precipitationType === 'light') return m.rainfallMm > 0 && m.rainfallMm < 10;
+        if (precipitationType === 'moderate') return m.rainfallMm >= 10 && m.rainfallMm <= 20;
+        if (precipitationType === 'intense') return m.rainfallMm > 20;
+        return true;
+      });
+    }
+
+    // Filtro por hora
+    const startH = parseInt(startHour);
+    const endH = parseInt(endHour);
+    filtered = filtered.filter((m) => {
+      const hour = new Date(m.measuredAt).getHours();
+      return hour >= startH && hour <= endH;
+    });
+
+    return filtered;
+  }, [monthMeasurements, searchQuery, selectedDate, precipitationType, startHour, endHour]);
 
   const paginatedMeasurements = filteredMeasurements.slice(0, (page + 1) * PAGE_SIZE);
   const hasMore = paginatedMeasurements.length < filteredMeasurements.length;
@@ -75,6 +123,15 @@ export function HistorialList() {
     setPage(0);
   };
 
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedDate(null);
+    setPrecipitationType(null);
+    setStartHour('00');
+    setEndHour('23');
+    setPage(0);
+  };
+
   const formatTime = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -82,6 +139,13 @@ export function HistorialList() {
 
   const formatMonthBadge = (iso: string) => {
     return new Date(iso).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }).toUpperCase();
+  };
+
+  const getPrecipitationLabel = (mm: number, noRain: boolean) => {
+    if (mm === 0 || noRain) return 'Sin lluvia';
+    if (mm < 10) return 'Ligera';
+    if (mm <= 20) return 'Moderada';
+    return 'Intensa';
   };
 
   return (
@@ -112,17 +176,142 @@ export function HistorialList() {
         </Card.Content>
       </Card>
 
+      {/* Search Bar */}
       <View style={styles.searchWrapper}>
         <Ionicons name="search" size={18} color={COLORS.textSecondary} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="🔍 Buscar por fecha u observación..."
+          placeholder="🔍 Buscar observación..."
           placeholderTextColor={COLORS.textSecondary}
           value={searchQuery}
           onChangeText={(t) => { setSearchQuery(t); setPage(0); }}
         />
       </View>
 
+      {/* Filter Toggle */}
+      <TouchableOpacity 
+        style={[styles.filterToggle, showFilters && styles.filterToggleActive]}
+        onPress={() => setShowFilters(!showFilters)}
+      >
+        <Ionicons name={showFilters ? "filter" : "filter"} size={18} color={showFilters ? COLORS.primary : COLORS.textSecondary} />
+        <Text style={[styles.filterToggleText, showFilters && styles.filterToggleTextActive]}>
+          {showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+        </Text>
+        <Ionicons name={showFilters ? "chevron-up" : "chevron-down"} size={18} color={showFilters ? COLORS.primary : COLORS.textSecondary} />
+      </TouchableOpacity>
+
+      {/* Advanced Filters */}
+      {showFilters && (
+        <Card style={styles.filterCard}>
+          <Card.Content style={styles.filterContent}>
+            {/* Date Filter */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>📅 Seleccionar Fecha</Text>
+              <TouchableOpacity 
+                style={[styles.dateButton, selectedDate && styles.dateButtonActive]}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Ionicons name="calendar" size={18} color={selectedDate ? COLORS.primary : COLORS.textSecondary} />
+                <Text style={[styles.dateButtonText, selectedDate && styles.dateButtonTextActive]}>
+                  {selectedDate ? selectedDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Toca para seleccionar fecha'}
+                </Text>
+              </TouchableOpacity>
+              {selectedDate && (
+                <TouchableOpacity style={styles.clearDateButton} onPress={() => { setSelectedDate(null); setPage(0); }}>
+                  <Text style={styles.clearDateButtonText}>✕ Limpiar fecha</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Precipitation Type Filter */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>🌧️ Tipo de Precipitación</Text>
+              <View style={styles.filterButtonsRow}>
+                {[
+                  { id: 'dry', label: '☁️ Sin lluvia', icon: '☁️' },
+                  { id: 'light', label: '🌤️ Ligera', icon: '🌤️' },
+                  { id: 'moderate', label: '🌧️ Moderada', icon: '🌧️' },
+                  { id: 'intense', label: '⛈️ Intensa', icon: '⛈️' },
+                ].map((type) => (
+                  <TouchableOpacity
+                    key={type.id}
+                    style={[
+                      styles.filterButton,
+                      precipitationType === type.id && styles.filterButtonActive,
+                    ]}
+                    onPress={() => {
+                      setPrecipitationType(precipitationType === type.id ? null : type.id);
+                      setPage(0);
+                    }}
+                  >
+                    <Text style={styles.filterButtonEmoji}>{type.icon}</Text>
+                    <Text
+                      style={[
+                        styles.filterButtonLabel,
+                        precipitationType === type.id && styles.filterButtonLabelActive,
+                      ]}
+                    >
+                      {type.label.split(' ')[1]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Hour Range Filter */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>🕐 Rango de Hora</Text>
+              <View style={styles.hourFilterRow}>
+                <View style={styles.hourFilter}>
+                  <Text style={styles.hourLabel}>Desde:</Text>
+                  <View style={styles.hourInputGroup}>
+                    <TouchableOpacity 
+                      onPress={() => setStartHour(String((parseInt(startHour) - 1 + 24) % 24).padStart(2, '0'))}
+                      style={styles.hourButton}
+                    >
+                      <Ionicons name="remove" size={16} color={COLORS.primary} />
+                    </TouchableOpacity>
+                    <Text style={styles.hourValue}>{startHour}:00</Text>
+                    <TouchableOpacity 
+                      onPress={() => setStartHour(String((parseInt(startHour) + 1) % 24).padStart(2, '0'))}
+                      style={styles.hourButton}
+                    >
+                      <Ionicons name="add" size={16} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.hourFilter}>
+                  <Text style={styles.hourLabel}>Hasta:</Text>
+                  <View style={styles.hourInputGroup}>
+                    <TouchableOpacity 
+                      onPress={() => setEndHour(String((parseInt(endHour) - 1 + 24) % 24).padStart(2, '0'))}
+                      style={styles.hourButton}
+                    >
+                      <Ionicons name="remove" size={16} color={COLORS.primary} />
+                    </TouchableOpacity>
+                    <Text style={styles.hourValue}>{endHour}:00</Text>
+                    <TouchableOpacity 
+                      onPress={() => setEndHour(String((parseInt(endHour) + 1) % 24).padStart(2, '0'))}
+                      style={styles.hourButton}
+                    >
+                      <Ionicons name="add" size={16} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* Clear Filters Button */}
+            <TouchableOpacity style={styles.clearButton} onPress={clearFilters}>
+              <Ionicons name="close-circle" size={18} color={COLORS.white} />
+              <Text style={styles.clearButtonText}>Limpiar Filtros</Text>
+            </TouchableOpacity>
+          </Card.Content>
+        </Card>
+      )}
+
+      {/* Results */}
       {paginatedMeasurements.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>Sin registros para esa fecha</Text>
@@ -136,13 +325,19 @@ export function HistorialList() {
                   <View style={styles.dateBadge}>
                     <Text style={styles.dateBadgeText}>{formatMonthBadge(m.measuredAt)}</Text>
                   </View>
-                  <Text style={styles.listItemTime}>{formatTime(m.measuredAt)}</Text>
+                  <View style={styles.listItemInfo}>
+                    <Text style={styles.listItemTime}>{formatTime(m.measuredAt)}</Text>
+                    <Text style={styles.listItemPrecip}>{getPrecipitationLabel(m.rainfallMm, m.noRain)}</Text>
+                  </View>
                 </View>
                 <View style={styles.listItemRight}>
                   <Text style={styles.listItemMm}>{m.rainfallMm.toFixed(1)} mm</Text>
                   <Text style={styles.listItemIcon}>{m.rainfallMm > 0 ? '🌧' : '☁️'}</Text>
                 </View>
               </View>
+              {m.observations && (
+                <Text style={styles.listItemObservations}>💬 {m.observations}</Text>
+              )}
               {i < paginatedMeasurements.length - 1 && <View style={styles.listSeparator} />}
             </View>
           ))}
@@ -152,6 +347,37 @@ export function HistorialList() {
             </TouchableOpacity>
           )}
         </>
+      )}
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate || new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, date) => {
+            if (Platform.OS === 'android') {
+              setShowDatePicker(false);
+              if (event.type === 'set' && date) {
+                setSelectedDate(date);
+                setPage(0);
+              }
+            } else if (date) {
+              setSelectedDate(date);
+              setPage(0);
+            }
+          }}
+          maximumDate={new Date()}
+        />
+      )}
+      {Platform.OS === 'ios' && showDatePicker && (
+        <View style={styles.datePickerContainer}>
+          <TouchableOpacity 
+            style={styles.datePickerDone}
+            onPress={() => setShowDatePicker(false)}
+          >
+            <Text style={styles.datePickerDoneText}>Hecho</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -297,6 +523,199 @@ const styles = StyleSheet.create({
   loadMoreBtnText: {
     fontSize: 14,
     fontWeight: '600',
+    color: COLORS.primary,
+  },
+  filterToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: COLORS.grayLight,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  filterToggleActive: {
+    borderColor: COLORS.primary,
+  },
+  filterToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  filterToggleTextActive: {
+    color: COLORS.primary,
+  },
+  filterCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '20',
+  },
+  filterContent: {
+    gap: 16,
+  },
+  filterSection: {
+    gap: 12,
+  },
+  filterLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  filterButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  filterButton: {
+    flex: 1,
+    minWidth: '47%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.grayLight,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary + '15',
+    borderColor: COLORS.primary,
+  },
+  filterButtonEmoji: {
+    fontSize: 18,
+  },
+  filterButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  filterButtonLabelActive: {
+    color: COLORS.primary,
+  },
+  hourFilterRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  hourFilter: {
+    flex: 1,
+    gap: 8,
+  },
+  hourLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  hourInputGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.grayLight,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  hourButton: {
+    padding: 4,
+  },
+  hourValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.primary,
+    minWidth: 60,
+    textAlign: 'center',
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    marginTop: 8,
+  },
+  clearButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  listItemInfo: {
+    flexDirection: 'column',
+    gap: 2,
+  },
+  listItemPrecip: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  listItemObservations: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.white,
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: COLORS.grayLight,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  dateButtonActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary + '15',
+  },
+  dateButtonText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    flex: 1,
+  },
+  dateButtonTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  clearDateButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 6,
+    backgroundColor: COLORS.grayLight,
+  },
+  clearDateButtonText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  datePickerContainer: {
+    backgroundColor: COLORS.grayLight,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.textSecondary + '30',
+  },
+  datePickerDone: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  datePickerDoneText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: COLORS.primary,
   },
 });
