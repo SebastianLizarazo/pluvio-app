@@ -7,7 +7,7 @@ import { useUserMeasurements } from '@/hooks/useUserMeasurements';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { TANK_DEFAULT_LIMITS, ANALYTICS_DEFAULTS } from '@/constants/app';
 import { mmToLiters } from '@/utils';
-import { TankBar } from './components/TankBar';
+import { TankBar } from '@/components/analysis/TankBar';
 
 const COLORS = {
   primary: '#1B3A6B',

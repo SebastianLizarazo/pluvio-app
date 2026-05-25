@@ -7,7 +7,7 @@ import { useUserMeasurements } from '@/hooks/useUserMeasurements';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { ANALYTICS_DEFAULTS } from '@/constants/app';
 import { toIsoDate } from '@/utils/date';
-import { MonthBarChart } from './components/MonthBarChart';
+import { MonthBarChart } from '@/components/analysis/MonthBarChart';
 
 const COLORS = {
   primary: '#1B3A6B',
