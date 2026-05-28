@@ -7,16 +7,13 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { mmToLiters } from '@/utils';
-
 interface TankIndicatorProps {
   currentMm: number;
   maxMm: number;
-  diameterCm: number;
   title: string;
 }
 
-export const TankIndicator = ({ currentMm, maxMm, diameterCm, title }: TankIndicatorProps) => {
+export const TankIndicator = ({ currentMm, maxMm, title }: TankIndicatorProps) => {
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -36,8 +33,8 @@ export const TankIndicator = ({ currentMm, maxMm, diameterCm, title }: TankIndic
         <Animated.View style={[styles.waterFill, fillStyle]} />
       </View>
 
-      <Text variant="bodyMedium">{currentMm.toFixed(2)} mm</Text>
-      <Text variant="bodySmall">{mmToLiters(currentMm, diameterCm).toFixed(2)} litros</Text>
+      <Text variant="bodyMedium">{currentMm.toFixed(1)} mm</Text>
+      <Text variant="bodySmall">{(currentMm * 10).toFixed(1)} litros</Text>
     </View>
   );
 };

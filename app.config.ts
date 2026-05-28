@@ -18,6 +18,9 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.pluvio.app',
+    infoPlist: {
+      NSCameraUsageDescription: 'PluvioApp necesita acceso a tu cámara para escanear códigos QR.',
+    },
   },
   android: {
     adaptiveIcon: {
@@ -27,7 +30,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: 'com.pluvio.app',
-    permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'POST_NOTIFICATIONS'],
+    permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'POST_NOTIFICATIONS', 'CAMERA'],
   },
   web: {
     favicon: './assets/favicon.png',

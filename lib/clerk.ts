@@ -1,10 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-import { env } from '@/lib/env';
-
 const CLERK_TOKEN_KEY = 'pluvio-clerk-token';
-
-export const clerkPublishableKey = env.clerkPublishableKey;
 
 export const tokenCache = {
   async getToken(key: string): Promise<string | null> {

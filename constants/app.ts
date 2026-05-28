@@ -1,5 +1,8 @@
 export const APP_NAME = 'PluvioApp';
 
+// Behavior tags for precipitation types
+export const BEHAVIOR_TAGS = ['granizo', 'lluvia_torrencial', 'lluvias_intermitentes', 'vientos_muy_fuertes'] as const;
+
 export const TANK_DEFAULT_LIMITS = {
   day: 50,
   month: 300,

@@ -1,4 +1,9 @@
-export const toIsoDate = (value: Date): string => value.toISOString().slice(0, 10);
+export const toIsoDate = (value: Date): string => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export const getYearMonth = (value: Date): { year: number; month: number } => ({
   year: value.getUTCFullYear(),

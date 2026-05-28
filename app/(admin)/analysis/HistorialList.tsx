@@ -1,11 +1,16 @@
 import { useState, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Modal } from 'react-native';
-import { Text, Card } from 'react-native-paper';
+import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Modal, Alert } from 'react-native';
+import { Text, Card, Button } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
+import { useSupabaseClient } from '@/hooks/useSupabaseClient';
+import { useAppSession } from '@/hooks/useAppSession';
+import { updateLocalMeasurement } from '@/lib/sqlite';
 import { toIsoDate } from '@/utils/date';
+import type { Measurement } from '@/types/domain';
 
 const COLORS = {
   primary: '#1B3A6B',
@@ -22,6 +27,10 @@ const MONTH_FULL_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio'
 
 export function HistorialList() {
   const { data: measurements = [] } = useUserMeasurements();
+  const { userId } = useAppSession();
+  const supabaseClient = useSupabaseClient();
+  const queryClient = useQueryClient();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
@@ -30,17 +39,23 @@ export function HistorialList() {
   const [endHour, setEndHour] = useState('23');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Edit modal state
+  const [editingMeasurement, setEditingMeasurement] = useState<Measurement | null>(null);
+  const [editMm, setEditMm] = useState('');
+  const [isEditingLoading, setIsEditingLoading] = useState(false);
+  
   const PAGE_SIZE = 20;
 
   const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getUTCMonth();
+  const currentMonth = new Date().getMonth();
   const [navYear, setNavYear] = useState(currentYear);
   const [navMonth, setNavMonth] = useState(currentMonth);
 
   const monthMeasurements = useMemo(() => {
     return measurements.filter((m) => {
       const d = new Date(m.measuredAt);
-      return d.getUTCFullYear() === navYear && d.getUTCMonth() === navMonth;
+      return d.getFullYear() === navYear && d.getMonth() === navMonth;
     });
   }, [measurements, navYear, navMonth]);
 
@@ -148,6 +163,65 @@ export function HistorialList() {
     return 'Intensa';
   };
 
+  const openEditModal = (measurement: Measurement) => {
+    setEditingMeasurement(measurement);
+    setEditMm(measurement.rainfallMm.toString());
+  };
+
+  const saveEditedMeasurement = async () => {
+    if (!editingMeasurement || !editMm.trim()) {
+      Alert.alert('Error', 'Por favor ingresa un valor válido.');
+      return;
+    }
+
+    const newMm = parseFloat(editMm);
+    if (isNaN(newMm) || newMm < 0) {
+      Alert.alert('Error', 'Por favor ingresa un número válido mayor o igual a 0.');
+      return;
+    }
+
+    setIsEditingLoading(true);
+    try {
+      // Calculate the equivalent volume in ml (tank is 1m x 1m = 10,000 cm²)
+      const newVolumeMl = newMm > 0 ? newMm * 10000 : null;
+
+      // Update in Supabase
+      const { error } = await supabaseClient
+        .from('measurements')
+        .update({
+          rainfall_mm: newMm,
+          volume_ml: newVolumeMl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingMeasurement.id);
+
+      if (error) {
+        Alert.alert('Error', 'No se pudo guardar el cambio.');
+        return;
+      }
+
+      // Update in SQLite
+      updateLocalMeasurement({
+        ...editingMeasurement,
+        rainfallMm: newMm,
+        volumeMl: newVolumeMl,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Invalidate cache to refresh
+      queryClient.invalidateQueries({ queryKey: ['user-measurements', userId as string] });
+
+      Alert.alert('Éxito', 'Medición actualizada correctamente.');
+      setEditingMeasurement(null);
+      setEditMm('');
+    } catch (error) {
+      console.error('Error editing measurement:', error);
+      Alert.alert('Error', 'Ocurrió un error al guardar.');
+    } finally {
+      setIsEditingLoading(false);
+    }
+  };
+
   return (
     <View style={styles.listContainer}>
       <View style={styles.monthNav}>
@@ -170,8 +244,8 @@ export function HistorialList() {
 
       <Card style={styles.sectionCard}>
         <Card.Content>
-          <Text style={styles.sectionTitle}>Intensidad Máxima</Text>
-          <Text style={styles.intensityValue}>{maxDayInMonth.mm.toFixed(1)} mm/h</Text>
+          <Text style={styles.sectionTitle}>Máxima Registrada</Text>
+          <Text style={styles.intensityValue}>{maxDayInMonth.mm.toFixed(1)} mm</Text>
           <Text style={styles.intensitySubtext}>Registrado el {maxDayDateStr}</Text>
         </Card.Content>
       </Card>
@@ -332,7 +406,12 @@ export function HistorialList() {
                 </View>
                 <View style={styles.listItemRight}>
                   <Text style={styles.listItemMm}>{m.rainfallMm.toFixed(1)} mm</Text>
-                  <Text style={styles.listItemIcon}>{m.rainfallMm > 0 ? '🌧' : '☁️'}</Text>
+                  <TouchableOpacity 
+                    style={styles.editButton}
+                    onPress={() => openEditModal(m)}
+                  >
+                    <Ionicons name="pencil" size={16} color={COLORS.chartBlue} />
+                  </TouchableOpacity>
                 </View>
               </View>
               {m.observations && (
@@ -379,6 +458,71 @@ export function HistorialList() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Edit Modal */}
+      <Modal
+        visible={editingMeasurement !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingMeasurement(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Editar Medición</Text>
+              <TouchableOpacity
+                onPress={() => setEditingMeasurement(null)}
+                disabled={isEditingLoading}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {editingMeasurement && (
+              <>
+                <View style={styles.modalInfo}>
+                  <Text style={styles.modalInfoLabel}>Fecha y Hora:</Text>
+                  <Text style={styles.modalInfoValue}>
+                    {new Date(editingMeasurement.measuredAt).toLocaleString('es-ES')}
+                  </Text>
+                </View>
+
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Lluvia (mm)"
+                  placeholderTextColor={COLORS.textSecondary}
+                  value={editMm}
+                  onChangeText={setEditMm}
+                  keyboardType="numeric"
+                  editable={!isEditingLoading}
+                />
+
+                <View style={styles.modalButtonContainer}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setEditingMeasurement(null)}
+                    disabled={isEditingLoading}
+                    style={styles.modalButton}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={saveEditedMeasurement}
+                    loading={isEditingLoading}
+                    disabled={isEditingLoading}
+                    buttonColor={COLORS.primary}
+                    textColor={COLORS.white}
+                    style={styles.modalButton}
+                  >
+                    Guardar
+                  </Button>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -717,5 +861,63 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  // Edit Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  modalInfo: {
+    marginBottom: 16,
+  },
+  modalInfoLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  modalInfoValue: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: COLORS.textSecondary,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginBottom: 20,
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+  },
+  editButton: {
+    padding: 4,
   },
 });

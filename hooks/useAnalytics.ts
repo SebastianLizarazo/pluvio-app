@@ -33,7 +33,7 @@ export const useAnalytics = (year: number, dryThreshold = 60) => {
 
     const dailySeries = Array.from({ length: 366 }, (_, i) => ({
       day: i + 1,
-      mm: Number((dailyMap.get(i + 1) ?? 0).toFixed(2)),
+      mm: Number((dailyMap.get(i + 1) ?? 0).toFixed(1)),
     }));
 
     const monthTotals = Array.from({ length: 12 }, (_, i): MonthBucket => ({
@@ -47,7 +47,7 @@ export const useAnalytics = (year: number, dryThreshold = 60) => {
       monthTotals[month].totalMm += item.rainfallMm;
     });
 
-    const monthTotalsRounded = monthTotals.map((m) => ({ ...m, totalMm: Number(m.totalMm.toFixed(2)) }));
+    const monthTotalsRounded = monthTotals.map((m) => ({ ...m, totalMm: Number(m.totalMm.toFixed(1)) }));
 
     const topWet = [...monthTotalsRounded].sort((a, b) => b.totalMm - a.totalMm).slice(0, 3);
     const topDry = [...monthTotalsRounded].sort((a, b) => a.totalMm - b.totalMm).slice(0, 3);

@@ -77,6 +77,7 @@ export default function SignInScreen() {
           outlineColor={COLORS.textSecondary}
           activeOutlineColor={COLORS.primary}
           style={styles.input}
+          textColor="#1A1A1A"
         />
 
         <TextInput
@@ -88,6 +89,7 @@ export default function SignInScreen() {
           outlineColor={COLORS.textSecondary}
           activeOutlineColor={COLORS.primary}
           style={styles.input}
+          textColor="#1A1A1A"
           right={
             <TextInput.Icon
               icon={showPassword ? 'eye-off' : 'eye'}

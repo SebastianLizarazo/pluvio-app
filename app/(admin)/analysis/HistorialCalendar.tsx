@@ -24,16 +24,16 @@ const WEEKDAY_LABELS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
 
 export function HistorialCalendar() {
   const now = new Date();
-  const [navYear, setNavYear] = useState(now.getUTCFullYear());
-  const [navMonth, setNavMonth] = useState(now.getUTCMonth());
+  const [navYear, setNavYear] = useState(now.getFullYear());
+  const [navMonth, setNavMonth] = useState(now.getMonth());
 
   const { monthTotals, dailySeries } = useAnalytics(navYear, ANALYTICS_DEFAULTS.drySeasonThresholdMm);
 
   const monthTotalMm = monthTotals[navMonth]?.totalMm ?? 0;
 
   const { daysWithRainInMonth, avgMmPerDayInMonth, maxDayInMonth } = useMemo(() => {
-    const daysInMonth = new Date(Date.UTC(navYear, navMonth + 1, 0)).getUTCDate();
-    const startDayOfYear = Math.floor((Date.UTC(navYear, navMonth, 1) - Date.UTC(navYear, 0, 0)) / 86400000);
+    const daysInMonth = new Date(navYear, navMonth + 1, 0).getDate();
+    const startDayOfYear = Math.floor((new Date(navYear, navMonth, 1).getTime() - new Date(navYear, 0, 0).getTime()) / 86400000);
 
     const dayMap = new Map<number, number>();
     dailySeries.forEach((d, i) => {
@@ -58,19 +58,19 @@ export function HistorialCalendar() {
 
   const maxDayInMonthDateStr = useMemo(() => {
     if (maxDayInMonth.day <= 0 || maxDayInMonth.mm <= 0) return 'N/A';
-    const startDayOfYear = Math.floor((Date.UTC(navYear, navMonth, 1) - Date.UTC(navYear, 0, 0)) / 86400000);
+    const startDayOfYear = Math.floor((new Date(navYear, navMonth, 1).getTime() - new Date(navYear, 0, 0).getTime()) / 86400000);
     const actualDay = maxDayInMonth.day - startDayOfYear;
     if (actualDay < 1 || actualDay > 31) return 'N/A';
-    const date = new Date(Date.UTC(navYear, navMonth, actualDay));
+    const date = new Date(navYear, navMonth, actualDay);
     return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
   }, [navYear, navMonth, maxDayInMonth]);
 
   const calendarDays = useMemo(() => {
-    const daysInMonth = new Date(Date.UTC(navYear, navMonth + 1, 0)).getUTCDate();
-    const firstDayOfWeek = new Date(Date.UTC(navYear, navMonth, 1)).getUTCDay();
+    const daysInMonth = new Date(navYear, navMonth + 1, 0).getDate();
+    const firstDayOfWeek = new Date(navYear, navMonth, 1).getDay();
     const adjustedFirstDay = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
 
-    const startDayOfYear = Math.floor((Date.UTC(navYear, navMonth, 1) - Date.UTC(navYear, 0, 0)) / 86400000);
+    const startDayOfYear = Math.floor((new Date(navYear, navMonth, 1).getTime() - new Date(navYear, 0, 0).getTime()) / 86400000);
 
     const cells: Array<{ day: number | null; mm: number; isToday: boolean }> = [];
 
@@ -83,7 +83,7 @@ export function HistorialCalendar() {
     for (let d = 1; d <= daysInMonth; d++) {
       const dayOfYear = startDayOfYear + d;
       const mm = dailySeries[dayOfYear - 1]?.mm ?? 0;
-      const dateIso = toIsoDate(new Date(Date.UTC(navYear, navMonth, d)));
+      const dateIso = toIsoDate(new Date(navYear, navMonth, d));
       const isToday = dateIso === todayIso;
       cells.push({ day: d, mm, isToday });
     }
@@ -96,6 +96,42 @@ export function HistorialCalendar() {
     if (mm < 10) return '#90CAF9';
     if (mm <= 20) return '#2E5FA3';
     return '#1B3A6B';
+  };
+
+  const renderRainDrops = (mm: number) => {
+    if (mm === 0) {
+      // Empty drop
+      return (
+        <View style={styles.dropsContainer}>
+          <Ionicons name="water-outline" size={14} color={COLORS.textSecondary} />
+        </View>
+      );
+    }
+    if (mm < 10) {
+      // Light rain - 1 drop
+      return (
+        <View style={styles.dropsContainer}>
+          <Ionicons name="water" size={10} color={COLORS.chartBlue} />
+        </View>
+      );
+    }
+    if (mm <= 20) {
+      // Moderate rain - 2 drops
+      return (
+        <View style={styles.dropsContainer}>
+          <Ionicons name="water" size={10} color={COLORS.chartBlue} />
+          <Ionicons name="water" size={10} color={COLORS.chartBlue} style={{ marginLeft: -4 }} />
+        </View>
+      );
+    }
+    // Heavy rain - 3 drops
+    return (
+      <View style={styles.dropsContainer}>
+        <Ionicons name="water" size={10} color={COLORS.chartBlue} />
+        <Ionicons name="water" size={10} color={COLORS.chartBlue} style={{ marginLeft: -4 }} />
+        <Ionicons name="water" size={10} color={COLORS.chartBlue} style={{ marginLeft: -4 }} />
+      </View>
+    );
   };
 
   const navigateMonth = (delta: number) => {
@@ -144,10 +180,8 @@ export function HistorialCalendar() {
                 <Text style={[styles.calendarDayNum, cell.isToday && styles.calendarDayNumToday]}>
                   {cell.day}
                 </Text>
-                <Text style={[styles.calendarMm, { color: cell.mm > 0 ? COLORS.white : COLORS.textSecondary }]}>
-                  {cell.mm > 0 ? `${cell.mm.toFixed(1)}` : '⊘'}
-                </Text>
-                <View style={[styles.calendarCellDot, { backgroundColor: getCellColor(cell.mm) }]} />
+                <View style={{ flex: 1 }} />
+                {renderRainDrops(cell.mm)}
               </>
             )}
           </View>
@@ -156,19 +190,30 @@ export function HistorialCalendar() {
 
       <View style={styles.legendRow}>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#1B3A6B' }]} />
+          <View style={styles.legendDropsContainer}>
+            <Ionicons name="water" size={12} color={COLORS.chartBlue} />
+            <Ionicons name="water" size={12} color={COLORS.chartBlue} style={{ marginLeft: -4 }} />
+            <Ionicons name="water" size={12} color={COLORS.chartBlue} style={{ marginLeft: -4 }} />
+          </View>
           <Text style={styles.legendText}>Lluvia Intensa ({'>'}20mm)</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#2E5FA3' }]} />
+          <View style={styles.legendDropsContainer}>
+            <Ionicons name="water" size={12} color={COLORS.chartBlue} />
+            <Ionicons name="water" size={12} color={COLORS.chartBlue} style={{ marginLeft: -4 }} />
+          </View>
           <Text style={styles.legendText}>Moderada (10-20mm)</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#90CAF9' }]} />
+          <View style={styles.legendDropsContainer}>
+            <Ionicons name="water" size={12} color={COLORS.chartBlue} />
+          </View>
           <Text style={styles.legendText}>Ligera ({'<'}10mm)</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#E0E0E0' }]} />
+          <View style={styles.legendDropsContainer}>
+            <Ionicons name="water-outline" size={12} color={COLORS.textSecondary} />
+          </View>
           <Text style={styles.legendText}>Sin lluvia (0mm)</Text>
         </View>
       </View>
@@ -281,11 +326,23 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '600',
   },
+  dropsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
   calendarCellDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     marginTop: 2,
+  },
+  legendDropsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: -4,
   },
   legendRow: {
     flexDirection: 'row',

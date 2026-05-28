@@ -100,7 +100,7 @@ export const useMapStations = () => {
             longitude: Number(p.longitude),
             latestMeasuredAt: latest?.measured_at ?? null,
             latestRainfallMm: Number(latest?.rainfall_mm ?? 0),
-            todayTotalMm: Number((todayTotals.get(p.id) ?? 0).toFixed(2)),
+            todayTotalMm: Number((todayTotals.get(p.id) ?? 0).toFixed(1)),
             isOwn: p.user_id === userId,
           };
         });
