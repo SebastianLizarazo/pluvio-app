@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import * as XLSX from 'xlsx';
+import Excel from 'exceljs';
 
 import type { Measurement } from '@/types/domain';
 
@@ -34,11 +34,41 @@ export const exportMeasurementsCsv = async (rows: Measurement[]): Promise<void> 
 };
 
 export const exportMeasurementsXlsx = async (rows: Measurement[]): Promise<void> => {
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Measurements');
+  const workbook = new Excel.Workbook();
+  const worksheet = workbook.addWorksheet('Measurements');
 
-  const base64 = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' });
+  // Add headers
+  worksheet.addRow([
+    'id',
+    'userId',
+    'pluviometerId',
+    'measuredAt',
+    'volumeMl',
+    'rainfallMm',
+    'noRain',
+    'elapsedMinutes',
+    'observations',
+    'behaviors',
+  ]);
+
+  // Add data rows
+  rows.forEach((row) => {
+    worksheet.addRow([
+      row.id,
+      row.userId,
+      row.pluviometerId,
+      row.measuredAt,
+      row.volumeMl,
+      row.rainfallMm,
+      row.noRain,
+      row.elapsedMinutes,
+      row.observations ?? '',
+      row.behaviors.join('|'),
+    ]);
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const base64 = Buffer.from(buffer).toString('base64');
   const path = `${FileSystem.cacheDirectory}pluvio-export.xlsx`;
 
   await FileSystem.writeAsStringAsync(path, base64, {

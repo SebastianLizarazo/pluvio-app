@@ -1,0 +1,8 @@
+allowBuilds:
+  '@sentry/cli': set this to true or false
+onlyBuiltDependencies:
+  - '@sentry/cli'
+  - browser-tabs-lock
+  - bufferutil
+  - core-js
+  - utf-8-validate

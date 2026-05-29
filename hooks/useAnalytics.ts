@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
+import { toIsoDate } from '@/utils/date';
 
 type MonthBucket = {
   key: string;
@@ -16,25 +17,26 @@ export const useAnalytics = (year: number, dryThreshold = 60) => {
   return useMemo(() => {
     const inYear = measurements.filter((item) => new Date(item.measuredAt).getUTCFullYear() === year);
 
-    const dailyMap = new Map<number, number>();
+    // Map keyed by ISO date string (YYYY-MM-DD) — no timezone/time ambiguity
+    const dailyMap = new Map<string, number>();
     inYear.forEach((item) => {
-      const dayOfYear = Math.floor(
-        (Date.UTC(
-          new Date(item.measuredAt).getUTCFullYear(),
-          new Date(item.measuredAt).getUTCMonth(),
-          new Date(item.measuredAt).getUTCDate(),
-        ) -
-          Date.UTC(new Date(item.measuredAt).getUTCFullYear(), 0, 0)) /
-          86400000,
-      );
-
-      dailyMap.set(dayOfYear, (dailyMap.get(dayOfYear) ?? 0) + item.rainfallMm);
+      const key = toIsoDate(new Date(item.measuredAt));
+      dailyMap.set(key, (dailyMap.get(key) ?? 0) + item.rainfallMm);
     });
 
-    const dailySeries = Array.from({ length: 366 }, (_, i) => ({
-      day: i + 1,
-      mm: Number((dailyMap.get(i + 1) ?? 0).toFixed(2)),
-    }));
+    // Build 366-entry daily series indexed 1..366 alongside ISO dates for reference
+    const dailySeries = Array.from({ length: 366 }, (_, i) => {
+      const dayIndex = i + 1;
+      const date = new Date(Date.UTC(year, 0, dayIndex));
+      const key = toIsoDate(date);
+      return { day: dayIndex, mm: Number((dailyMap.get(key) ?? 0).toFixed(2)) };
+    });
+
+    // Max rain day: find the day (1-366) with highest mm
+    const maxRainDay = dailySeries.reduce(
+      (acc, item) => (item.mm > acc.mm ? item : acc),
+      { day: 1, mm: 0 },
+    );
 
     const monthTotals = Array.from({ length: 12 }, (_, i): MonthBucket => ({
       key: `${year}-${i + 1}`,
@@ -54,11 +56,6 @@ export const useAnalytics = (year: number, dryThreshold = 60) => {
 
     const wetSeason = monthTotalsRounded.filter((m) => m.totalMm >= dryThreshold).map((m) => m.label);
     const drySeason = monthTotalsRounded.filter((m) => m.totalMm < dryThreshold).map((m) => m.label);
-
-    const maxRainDay = dailySeries.reduce(
-      (acc, item) => (item.mm > acc.mm ? item : acc),
-      { day: 1, mm: 0 },
-    );
 
     const daysWithRain = new Set(
       inYear

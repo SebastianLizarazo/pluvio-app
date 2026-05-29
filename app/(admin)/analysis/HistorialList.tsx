@@ -5,6 +5,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
+import { useAppSession } from '@/hooks/useAppSession';
+import { getLocalMeasurementsByUser } from '@/lib/sqlite';
 import { toIsoDate } from '@/utils/date';
 
 const COLORS = {
@@ -22,6 +24,10 @@ const MONTH_FULL_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio'
 
 export function HistorialList() {
   const { data: measurements = [] } = useUserMeasurements();
+  const { userId } = useAppSession();
+  const localData = userId ? getLocalMeasurementsByUser(userId) : [];
+  console.log('LOCAL SQLite records:', localData.length);
+  localData.forEach((m) => console.log('   date:', m.measuredAt, 'mm:', m.rainfallMm, 'synced:', m.synced));
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
@@ -49,12 +55,23 @@ export function HistorialList() {
     monthMeasurements.filter((m) => m.rainfallMm > 0).map((m) => toIsoDate(new Date(m.measuredAt)))
   ).size;
 
-  const maxDayInMonth = useMemo(() => {
-    return monthMeasurements.reduce(
-      (acc, m) => (m.rainfallMm > acc.mm ? { mm: m.rainfallMm, date: m.measuredAt } : acc),
-      { mm: 0, date: '' }
-    );
+  // Group by day to find the day with highest TOTAL mm — same definition as Panel's maxRainDay
+  const dailyTotalsForMonth = useMemo(() => {
+    const map = new Map<string, number>();
+    monthMeasurements.forEach((m) => {
+      const key = toIsoDate(new Date(m.measuredAt));
+      map.set(key, (map.get(key) ?? 0) + m.rainfallMm);
+    });
+    return map;
   }, [monthMeasurements]);
+
+  const maxDayInMonth = useMemo(() => {
+    let acc = { mm: 0, date: '' };
+    dailyTotalsForMonth.forEach((mm, date) => {
+      if (mm > acc.mm) acc = { mm, date };
+    });
+    return acc;
+  }, [dailyTotalsForMonth]);
 
   const maxDayDateStr = useMemo(() => {
     if (!maxDayInMonth.date) return 'N/A';
@@ -189,7 +206,7 @@ export function HistorialList() {
       </View>
 
       {/* Filter Toggle */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.filterToggle, showFilters && styles.filterToggleActive]}
         onPress={() => setShowFilters(!showFilters)}
       >
@@ -207,7 +224,7 @@ export function HistorialList() {
             {/* Date Filter */}
             <View style={styles.filterSection}>
               <Text style={styles.filterLabel}>📅 Seleccionar Fecha</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.dateButton, selectedDate && styles.dateButtonActive]}
                 onPress={() => setShowDatePicker(true)}
               >
@@ -237,7 +254,7 @@ export function HistorialList() {
                     key={type.id}
                     style={[
                       styles.filterButton,
-                      precipitationType === type.id && styles.filterButtonActive,
+                      precipitationType === type.id && styles.fitlerButtonActive,
                     ]}
                     onPress={() => {
                       setPrecipitationType(precipitationType === type.id ? null : type.id);
@@ -265,14 +282,14 @@ export function HistorialList() {
                 <View style={styles.hourFilter}>
                   <Text style={styles.hourLabel}>Desde:</Text>
                   <View style={styles.hourInputGroup}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => setStartHour(String((parseInt(startHour) - 1 + 24) % 24).padStart(2, '0'))}
                       style={styles.hourButton}
                     >
                       <Ionicons name="remove" size={16} color={COLORS.primary} />
                     </TouchableOpacity>
                     <Text style={styles.hourValue}>{startHour}:00</Text>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => setStartHour(String((parseInt(startHour) + 1) % 24).padStart(2, '0'))}
                       style={styles.hourButton}
                     >
@@ -284,14 +301,14 @@ export function HistorialList() {
                 <View style={styles.hourFilter}>
                   <Text style={styles.hourLabel}>Hasta:</Text>
                   <View style={styles.hourInputGroup}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => setEndHour(String((parseInt(endHour) - 1 + 24) % 24).padStart(2, '0'))}
                       style={styles.hourButton}
                     >
                       <Ionicons name="remove" size={16} color={COLORS.primary} />
                     </TouchableOpacity>
                     <Text style={styles.hourValue}>{endHour}:00</Text>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => setEndHour(String((parseInt(endHour) + 1) % 24).padStart(2, '0'))}
                       style={styles.hourButton}
                     >
@@ -371,7 +388,7 @@ export function HistorialList() {
       )}
       {Platform.OS === 'ios' && showDatePicker && (
         <View style={styles.datePickerContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.datePickerDone}
             onPress={() => setShowDatePicker(false)}
           >
@@ -504,7 +521,7 @@ const styles = StyleSheet.create({
   listItemMm: {
     fontSize: 15,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+   color: COLORS.textPrimary,
   },
   listItemIcon: {
     fontSize: 16,
@@ -717,5 +734,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  fitlerButtonActive: {
+    backgroundColor: COLORS.primary + '15',
+    borderColor: COLORS.primary,
   },
 });
