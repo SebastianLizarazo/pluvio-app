@@ -76,6 +76,7 @@ export default function SignInScreen() {
           autoCapitalize="none"
           outlineColor={COLORS.textSecondary}
           activeOutlineColor={COLORS.primary}
+          textColor="#000000"
           style={styles.input}
         />
 
@@ -87,6 +88,7 @@ export default function SignInScreen() {
           secureTextEntry={!showPassword}
           outlineColor={COLORS.textSecondary}
           activeOutlineColor={COLORS.primary}
+          textColor="#000000"
           style={styles.input}
           right={
             <TextInput.Icon

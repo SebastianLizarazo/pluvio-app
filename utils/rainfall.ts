@@ -1,3 +1,5 @@
+export const TANK_DIAMETER_CM = 100; // 1m = 100cm (1000L tank)
+
 export const getArea = (diameterCm: number): number => {
   return Math.PI * Math.pow(diameterCm / 2, 2);
 };

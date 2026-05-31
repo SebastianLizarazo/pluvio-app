@@ -1,13 +1,12 @@
 import { useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Text, Card } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
 import { useAnalytics } from '@/hooks/useAnalytics';
-import { TANK_DEFAULT_LIMITS, ANALYTICS_DEFAULTS } from '@/constants/app';
-import { mmToLiters } from '@/utils';
-import { TankBar } from '@/components/analysis/TankBar';
+import { ANALYTICS_DEFAULTS } from '@/constants/app';
+import { WaterLevelCard } from '@/components/WaterLevelCard';
 
 const COLORS = {
   primary: '#1B3A6B',
@@ -26,10 +25,6 @@ export function PanelContent() {
   const currentYear = new Date().getFullYear();
   const { monthTotals, topWet, maxRainDay, bestDryStreak, wetSeason, drySeason } = useAnalytics(currentYear, ANALYTICS_DEFAULTS.drySeasonThresholdMm);
   const { todayTotalMm, monthTotalMm, semesterTotalMm } = useUserMeasurements();
-
-  const litersDay = mmToLiters(todayTotalMm, 20);
-  const litersMonth = mmToLiters(monthTotalMm, 20);
-  const litersSemester = mmToLiters(semesterTotalMm, 20);
 
   const totalAnnualMm = useMemo(() => {
     return monthTotals.reduce((acc, m) => acc + m.totalMm, 0);
@@ -64,23 +59,10 @@ export function PanelContent() {
         )}
       </View>
 
-      <TankBar
-        label="HOY"
-        valueMm={todayTotalMm}
-        limitMm={TANK_DEFAULT_LIMITS.day}
-        subtext={`${litersDay.toFixed(1)} L / M²`}
-      />
-      <TankBar
-        label="ESTE MES"
-        valueMm={monthTotalMm}
-        limitMm={TANK_DEFAULT_LIMITS.month}
-        subtext={`${litersMonth.toFixed(1)} L / M²`}
-      />
-      <TankBar
-        label="SEMESTRE"
-        valueMm={semesterTotalMm}
-        limitMm={TANK_DEFAULT_LIMITS.semester}
-        subtext={`${litersSemester.toFixed(1)} L / M²`}
+      <WaterLevelCard
+        todayTotalMm={todayTotalMm}
+        monthTotalMm={monthTotalMm}
+        semesterTotalMm={semesterTotalMm}
       />
 
       <Card style={styles.sectionCard}>

@@ -1,10 +1,6 @@
 export const APP_NAME = 'PluvioApp';
 
-export const TANK_DEFAULT_LIMITS = {
-  day: 50,
-  month: 300,
-  semester: 1000,
-} as const;
+export const TANK_MAX_MM = 127.32; // 1000L tank = 1m³, 100cm diameter = 7854cm² area → 127.32mm to fill
 
 export const ANALYTICS_DEFAULTS = {
   drySeasonThresholdMm: 60,

@@ -7,22 +7,22 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { mmToLiters } from '@/utils';
+import { mmToLiters, TANK_DIAMETER_CM } from '@/utils';
+import { TANK_MAX_MM } from '@/constants/app';
 
 interface TankIndicatorProps {
   currentMm: number;
-  maxMm: number;
-  diameterCm: number;
   title: string;
+  subtitle?: string;
 }
 
-export const TankIndicator = ({ currentMm, maxMm, diameterCm, title }: TankIndicatorProps) => {
+export const TankIndicator = ({ currentMm, title, subtitle }: TankIndicatorProps) => {
   const progress = useSharedValue(0);
 
   useEffect(() => {
-    const normalized = Math.min(1, Math.max(0, currentMm / maxMm));
+    const normalized = Math.min(1, Math.max(0, currentMm / TANK_MAX_MM));
     progress.value = withTiming(normalized, { duration: 700 });
-  }, [currentMm, maxMm, progress]);
+  }, [currentMm, progress]);
 
   const fillStyle = useAnimatedStyle(() => ({
     height: `${progress.value * 100}%`,
@@ -37,21 +37,29 @@ export const TankIndicator = ({ currentMm, maxMm, diameterCm, title }: TankIndic
       </View>
 
       <Text variant="bodyMedium">{currentMm.toFixed(2)} mm</Text>
-      <Text variant="bodySmall">{mmToLiters(currentMm, diameterCm).toFixed(2)} litros</Text>
+      <Text variant="bodySmall">{mmToLiters(currentMm, TANK_DIAMETER_CM).toFixed(2)} L</Text>
+      {subtitle && <Text variant="bodySmall" style={styles.subtitle}>{subtitle}</Text>}
     </View>
   );
+};
+
+const COLORS = {
+  chartBlue: '#2E5FA3',
+  grayLight: '#F5F5F5',
+  textSecondary: '#888888',
 };
 
 const styles = StyleSheet.create({
   wrapper: {
     alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
   tank: {
     width: 82,
     height: 130,
     borderWidth: 2,
-    borderColor: '#0E6BA8',
+    borderColor: COLORS.chartBlue,
     borderRadius: 10,
     overflow: 'hidden',
     justifyContent: 'flex-end',
@@ -60,5 +68,11 @@ const styles = StyleSheet.create({
   waterFill: {
     width: '100%',
     backgroundColor: '#56B4D3',
+  },
+  subtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
+    textAlign: 'center',
   },
 });

@@ -26,8 +26,6 @@ export function HistorialList() {
   const { data: measurements = [] } = useUserMeasurements();
   const { userId } = useAppSession();
   const localData = userId ? getLocalMeasurementsByUser(userId) : [];
-  console.log('LOCAL SQLite records:', localData.length);
-  localData.forEach((m) => console.log('   date:', m.measuredAt, 'mm:', m.rainfallMm, 'synced:', m.synced));
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
