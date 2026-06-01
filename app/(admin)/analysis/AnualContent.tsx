@@ -83,19 +83,6 @@ export function AnualContent() {
     return ((daysWithRain / daysInYear) * 100).toFixed(1);
   })();
 
-  const semesterMm = useMemo(() => {
-    const now = new Date();
-    const currentMonth = now.getUTCMonth();
-    let semesterTotal = 0;
-    for (let i = Math.max(0, currentMonth - 5); i <= currentMonth; i++) {
-      semesterTotal += monthTotals[i]?.totalMm ?? 0;
-    }
-    return semesterTotal;
-  }, [monthTotals]);
-
-  const soilStatus = semesterMm > 300 ? 'Óptimo' : 'En observación';
-  const soilStatusColor = semesterMm > 300 ? COLORS.green : '#F57C00';
-
   return (
     <ScrollView style={styles.anualContainer} contentContainerStyle={styles.anualContent}>
       <View style={styles.anualHeader}>
@@ -209,16 +196,6 @@ export function AnualContent() {
           <Text style={styles.sectionTitle}>Frecuencia de Lluvia</Text>
           <Text style={styles.frequencyDesc}>{daysWithRain} días con precipitación registrada.</Text>
           <Text style={styles.frequencyPct}>{rainPct}%</Text>
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.sectionCard}>
-        <Card.Content>
-          <Text style={styles.sectionTitle}>Estado de Suelo</Text>
-          <Text style={styles.soilDesc}>Basado en rainfall del semestre.</Text>
-          <View style={[styles.badge, { alignSelf: 'flex-start', backgroundColor: soilStatusColor + '20' }]}>
-            <Text style={[styles.badgeText, { color: soilStatusColor }]}>{soilStatus}</Text>
-          </View>
         </Card.Content>
       </Card>
     </ScrollView>
@@ -376,19 +353,5 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '700',
     color: COLORS.primary,
-  },
-  soilDesc: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginBottom: 8,
-  },
-  badge: {
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '700',
   },
 });

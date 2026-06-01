@@ -33,5 +33,5 @@ export const BEHAVIOR_OPTIONS = [
   'granizo',
   'lluvia_torrencial',
   'lluvias_intermitentes',
-  'incendio',
+  'otras',
 ] as const;

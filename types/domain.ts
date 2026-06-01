@@ -5,7 +5,7 @@ export type BehaviorTag =
   | 'granizo'
   | 'lluvia_torrencial'
   | 'lluvias_intermitentes'
-  | 'incendio';
+  | 'otras';
 
 export interface Pluviometer {
   id: string;

@@ -32,7 +32,7 @@ const PRECIPITATION_OPTIONS = [
   { label: 'Granizo', icon: 'snow' },
   { label: 'Lluvia torrencial', icon: 'rainy' },
   { label: 'Lluvias intermitentes', icon: 'water' },
-  { label: 'Incendio', icon: 'flame' },
+  { label: 'Otras', icon: 'ellipsis-horizontal' },
 ];
 
 export default function RegisterScreen() {
@@ -306,24 +306,26 @@ export default function RegisterScreen() {
         </Card.Content>
       </Card>
 
-      {/* Observaciones */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text style={styles.cardLabel}>OBSERVACIONES</Text>
-          <TextInput
-            mode="outlined"
-            placeholder="Observaciones adicionales..."
-            value={observations}
-            onChangeText={setObservations}
-            multiline
-            numberOfLines={4}
-            style={styles.observationsInput}
-            textColor={COLORS.textPrimary}
-            outlineColor={COLORS.textSecondary}
-            activeOutlineColor={COLORS.primary}
-          />
-        </Card.Content>
-      </Card>
+      {/* Observaciones - solo se muestra cuando "Otras" está seleccionado */}
+      {selectedBehaviors.includes('Otras') && (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text style={styles.cardLabel}>OBSERVACIONES</Text>
+            <TextInput
+              mode="outlined"
+              placeholder="Describe el tipo de precipitación..."
+              value={observations}
+              onChangeText={setObservations}
+              multiline
+              numberOfLines={4}
+              style={styles.observationsInput}
+              textColor={COLORS.textPrimary}
+              outlineColor={COLORS.textSecondary}
+              activeOutlineColor={COLORS.primary}
+            />
+          </Card.Content>
+        </Card>
+      )}
 
       {/* Botón guardar */}
       <Button
