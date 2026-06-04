@@ -4,9 +4,17 @@ import { Text, Card } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useUserMeasurements } from '@/hooks/useUserMeasurements';
 import { ANALYTICS_DEFAULTS } from '@/constants/app';
 import { toIsoDate } from '@/utils/date';
-import type { Measurement } from '@/types/domain';
+
+type CalendarCell = {
+  day: number | null;
+  mm: number;
+  isToday: boolean;
+  noRain: boolean; // true = usuario registró "no hubo lluvia"
+  hasRecord: boolean; // true = hay algún registro (lluvia o noRain)
+};
 
 const COLORS = {
   primary: '#1B3A6B',
@@ -17,6 +25,7 @@ const COLORS = {
   textSecondary: '#888888',
   textTertiary: '#2DB87B',
   white: '#FFFFFF',
+  redSoft: '#D32F2F', // para interrogación sin registro
 };
 
 const MONTH_FULL_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -28,6 +37,7 @@ export function HistorialCalendar() {
   const [navMonth, setNavMonth] = useState(now.getUTCMonth());
 
   const { monthTotals, dailySeries } = useAnalytics(navYear, ANALYTICS_DEFAULTS.drySeasonThresholdMm);
+  const { data: measurements = [] } = useUserMeasurements();
 
   const monthTotalMm = monthTotals[navMonth]?.totalMm ?? 0;
 
@@ -70,32 +80,71 @@ export function HistorialCalendar() {
     const firstDayOfWeek = new Date(Date.UTC(navYear, navMonth, 1)).getUTCDay();
     const adjustedFirstDay = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
 
-    const startDayOfYear = Math.floor((Date.UTC(navYear, navMonth, 1) - Date.UTC(navYear, 0, 0)) / 86400000);
-
-    const cells: Array<{ day: number | null; mm: number; isToday: boolean }> = [];
-
-    for (let i = 0; i < adjustedFirstDay; i++) {
-      cells.push({ day: null, mm: 0, isToday: false });
-    }
-
     const todayIso = toIsoDate(now);
 
+    // Build a Set of dates that have any measurement (regardless of mm value)
+    // This correctly distinguishes: user registered "no rain" (date in set, mm=0)
+    // vs user didn't register at all (date not in set)
+    const measurementDates = new Set<string>();
+    measurements.forEach((m) => {
+      const key = toIsoDate(new Date(m.measuredAt));
+      measurementDates.add(key);
+    });
+
+    // Build a date -> mm map directly from measurements for accurate lookup
+    const dateToMm = new Map<string, number>();
+    measurements.forEach((m) => {
+      const key = toIsoDate(new Date(m.measuredAt));
+      const current = dateToMm.get(key) ?? 0;
+      dateToMm.set(key, current + m.rainfallMm);
+    });
+
+    const cells: CalendarCell[] = [];
+
+    for (let i = 0; i < adjustedFirstDay; i++) {
+      cells.push({ day: null, mm: 0, isToday: false, noRain: false, hasRecord: false });
+    }
+
     for (let d = 1; d <= daysInMonth; d++) {
-      const dayOfYear = startDayOfYear + d;
-      const mm = dailySeries[dayOfYear - 1]?.mm ?? 0;
+      const mm = dateToMm.get(toIsoDate(new Date(Date.UTC(navYear, navMonth, d)))) ?? 0;
       const dateIso = toIsoDate(new Date(Date.UTC(navYear, navMonth, d)));
       const isToday = dateIso === todayIso;
-      cells.push({ day: d, mm, isToday });
+      const hasRecord = measurementDates.has(dateIso);
+
+      // noRain: there's a record but mm is 0 (user explicitly said "no rain")
+      cells.push({
+        day: d,
+        mm,
+        isToday,
+        noRain: hasRecord && mm === 0,
+        hasRecord,
+      });
     }
 
     return cells;
-  }, [dailySeries, navMonth, navYear, now]);
+  }, [navMonth, navYear, now, measurements]);
 
-  const getCellColor = (mm: number) => {
-    if (mm === 0) return '#E0E0E0';
-    if (mm < 10) return '#90CAF9';
-    if (mm <= 20) return '#2E5FA3';
-    return '#1B3A6B';
+  const getCellIcons = (cell: CalendarCell) => {
+    // Sin registro ese día
+    if (!cell.hasRecord) {
+      return { count: 1, name: 'help-circle' as const, color: COLORS.redSoft, size: 14 };
+    }
+    // Usuario registró que NO hubo lluvia
+    if (cell.noRain) {
+      return { count: 1, name: 'water' as const, color: '#E0E0E0', size: 14 };
+    }
+    // Hay registro de lluvia — cantidad según intensidad
+    if (cell.mm > 20) {
+      return { count: 3, name: 'water' as const, color: COLORS.primary, size: 12 };
+    }
+    if (cell.mm >= 10) {
+      return { count: 2, name: 'water' as const, color: COLORS.primary, size: 12 };
+    }
+    if (cell.mm > 0) {
+      return { count: 1, name: 'water' as const, color: COLORS.primary, size: 14 };
+    }
+    // Registro pero sin lluvia (no debería ocurrir si noRain cubre todo)
+    return { count: 1, name: 'water' as const, color: '#E0E0E0', size: 14 };
   };
 
   const navigateMonth = (delta: number) => {
@@ -130,46 +179,70 @@ export function HistorialCalendar() {
             <Text style={styles.calendarWeekdayText}>{d}</Text>
           </View>
         ))}
-        {calendarDays.map((cell, i) => (
-          <View
-            key={i}
-            style={[
-              styles.calendarCell,
-              cell.isToday && styles.calendarCellToday,
-              cell.day === null && styles.calendarCellEmpty,
-            ]}
-          >
-            {cell.day !== null && (
-              <>
-                <Text style={[styles.calendarDayNum, cell.isToday && styles.calendarDayNumToday]}>
-                  {cell.day}
-                </Text>
-                <Text style={[styles.calendarMm, { color: cell.mm > 0 ? COLORS.white : COLORS.textSecondary }]}>
-                  {cell.mm > 0 ? `${cell.mm.toFixed(1)}` : '⊘'}
-                </Text>
-                <View style={[styles.calendarCellDot, { backgroundColor: getCellColor(cell.mm) }]} />
-              </>
-            )}
-          </View>
-        ))}
+        {calendarDays.map((cell, i) => {
+            const icon = getCellIcons(cell);
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.calendarCell,
+                  cell.isToday && styles.calendarCellToday,
+                  cell.day === null && styles.calendarCellEmpty,
+                ]}
+              >
+                {cell.day !== null && (
+                  <>
+                    <Text style={[styles.calendarDayNum, cell.isToday && styles.calendarDayNumToday]}>
+                      {cell.day}
+                    </Text>
+                    <View style={styles.iconRow}>
+                      {Array.from({ length: icon.count }).map((_, idx) => (
+                        <Ionicons
+                          key={idx}
+                          name={icon.name}
+                          size={icon.size}
+                          color={icon.color}
+                        />
+                      ))}
+                    </View>
+                  </>
+                )}
+              </View>
+            );
+          })}
       </View>
 
       <View style={styles.legendRow}>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#1B3A6B' }]} />
-          <Text style={styles.legendText}>Lluvia Intensa ({'>'}20mm)</Text>
+          <View style={styles.iconRow}>
+            <Ionicons name="water" size={12} color={COLORS.primary} />
+          </View>
+          <Text style={styles.legendText}>Lluvia suave ({'<'}10mm)</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#2E5FA3' }]} />
+          <View style={styles.iconRow}>
+            <Ionicons name="water" size={12} color={COLORS.primary} />
+            <Ionicons name="water" size={12} color={COLORS.primary} />
+          </View>
           <Text style={styles.legendText}>Moderada (10-20mm)</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#90CAF9' }]} />
-          <Text style={styles.legendText}>Ligera ({'<'}10mm)</Text>
+          <View style={styles.iconRow}>
+            <Ionicons name="water" size={12} color={COLORS.primary} />
+            <Ionicons name="water" size={12} color={COLORS.primary} />
+            <Ionicons name="water" size={12} color={COLORS.primary} />
+          </View>
+          <Text style={styles.legendText}>Intensa ({'>'}20mm)</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#E0E0E0' }]} />
-          <Text style={styles.legendText}>Sin lluvia (0mm)</Text>
+          <View style={styles.iconRow}>
+            <Ionicons name="water" size={12} color="#E0E0E0" />
+          </View>
+          <Text style={styles.legendText}>Sin lluvia</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <Ionicons name="help-circle" size={14} color={COLORS.redSoft} />
+          <Text style={styles.legendText}>Sin registro</Text>
         </View>
       </View>
 
@@ -276,6 +349,12 @@ const styles = StyleSheet.create({
   calendarDayNumToday: {
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  iconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
   },
   calendarMm: {
     fontSize: 8,
