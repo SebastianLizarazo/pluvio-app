@@ -91,7 +91,7 @@ export function HistorialCalendar() {
       measurementDates.add(key);
     });
 
-    // Build a date -> mm map directly from measurements for accurate lookup
+// Build a date -> mm map directly from measurements for accurate lookup
     const dateToMm = new Map<string, number>();
     measurements.forEach((m) => {
       const key = toIsoDate(new Date(m.measuredAt));
@@ -119,6 +119,15 @@ export function HistorialCalendar() {
         noRain: hasRecord && mm === 0,
         hasRecord,
       });
+    }
+
+    // Rellenar la última fila para que siempre tenga 7 columnas
+    // Así el día 30 no queda flotando solo
+    const remainder = cells.length % 7;
+    if (remainder !== 0) {
+      for (let i = 0; i < 7 - remainder; i++) {
+        cells.push({ day: null, mm: 0, isToday: false, noRain: false, hasRecord: false });
+      }
     }
 
     return cells;
@@ -156,8 +165,33 @@ export function HistorialCalendar() {
     setNavYear(y);
   };
 
+  // ============================================================
+  // ESTRUCTURA DEL CALENDARIO
+  // ============================================================
+  //
+  // El calendario usa un Grid de 7 columnas (una por día de la semana).
+  // Cada fila del grid contiene 7 celdas. El grid usa:
+  //   - flexDirection: 'row' + flexWrap: 'wrap' para crear filas
+  //   - gap: 4 para espaciado entre celdas
+  //
+  // CONTENEDOR PRINCIPAL: calendarContainer (gap: 16 entre elementos)
+  //
+  // ELEMENTOS DEL CALENDARIO (de arriba hacia abajo):
+  // 1. monthNav: navegación del mes (←Mes Año→)
+  // 2. monthMetricCard: barra azul con el total mensual en mm
+  // 3. calendarGrid: grilla principal con encabezados y celdas de días
+  // 4. legendRow: leyenda con los iconos y su significado
+  // 5. monthStatsRow: 2 cards (días con lluvia, promedio/día)
+  // 6. recordCard: record diario con fecha
+  //
+  // ============================================================
+
   return (
     <View style={styles.calendarContainer}>
+      {/*
+       * 1. NAVEGACIÓN DE MES
+       * Flechas para ir al mes anterior/siguiente + nombre del mes
+       */}
       <View style={styles.monthNav}>
         <TouchableOpacity onPress={() => navigateMonth(-1)} style={styles.monthNavBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.primary} />
@@ -168,50 +202,103 @@ export function HistorialCalendar() {
         </TouchableOpacity>
       </View>
 
+      {/*
+       * 2. BARRA DE TOTAL MENSUAL
+       * Fondo azul, muestra el total acumulado del mes en mm
+       */}
       <View style={styles.monthMetricCard}>
         <Text style={styles.monthMetricLabel}>TOTAL MENSUAL</Text>
         <Text style={styles.monthMetricValue}>{monthTotalMm.toFixed(1)} mm</Text>
       </View>
 
+      {/*
+       * 3. GRILLA DEL CALENDARIO
+       *
+       * Esta es la parte más importante del diseño.
+       *
+       * El grid se arma con flexbox:
+       *   - flexDirection: 'row' → los elementos se colocan en filas
+       *   - flexWrap: 'wrap' → si no entran en la fila, pasan a la siguiente
+       *   - backgroundColor: grayLight (fondo de toda la grilla)
+       *   - gap: 4 → espaciado de 4px entre celdas
+       *
+       * ESTRUCTURA DEL GRID:
+       * - Primero se renderizan los 7 encabezados de día (LUN...DOM)
+       * - Luego se renderizan las celdas de los días del mes
+       * - Los días vacíos (null) tienen backgroundColor transparente
+       *
+       * ANCHO DE CADA CELDA:
+       *   width: (100 - 2) / 7 = 98/7 = 14%
+       *   - El 2% restante es para el gap total (gap: 4px multiplicado por 7 columnas = 28px ~ 2% del contenedor)
+       *   - aspectRatio: 1 → mantiene celdas cuadradas
+       *   - borderRadius: 8 → esquinas redondeadas
+       *
+       * MAPEO DE DÍAS A CELDAS:
+       * - calendarDays es un array que empieza con celdas vacías (null)
+       *   para compensar el offset del primer día del mes
+       * - adjustedFirstDay = qué día de la semana empieza el mes
+       *   (lunes=0, domingo=6, ajustando para que lunes sea 0 y domingo 6)
+       * - Ejemplo: si el mes empieza en miércoles, las primeras 2 celdas son null (lun, mar)
+       */}
       <View style={styles.calendarGrid}>
-        {WEEKDAY_LABELS.map((d) => (
-          <View key={d} style={styles.calendarWeekdayCell}>
-            <Text style={styles.calendarWeekdayText}>{d}</Text>
+        {/*
+         * FILA DE ENCABEZADO (días de semana: LUN...DOM)
+         * Cada celda usa flex: 1 → exactamente 1/7 del ancho
+         */}
+        <View style={styles.calendarRow}>
+          {WEEKDAY_LABELS.map((d) => (
+            <View key={d} style={styles.calendarWeekdayCell}>
+              <Text style={styles.calendarWeekdayText}>{d}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/*
+         * FILAS DE DÍAS DEL MES
+         * Cada fila tiene 7 celdas explícitamente
+         * flex: 1 en cada celda = 1/7 del ancho sin cálculos de porcentajes
+         */}
+        {Array.from({ length: Math.ceil(calendarDays.length / 7) }).map((_, rowIndex) => (
+          <View key={rowIndex} style={styles.calendarRow}>
+            {calendarDays.slice(rowIndex * 7, rowIndex * 7 + 7).map((cell, i) => {
+              const icon = getCellIcons(cell);
+              return (
+                <View
+                  key={i}
+                  style={[
+                    styles.calendarCell,
+                    cell.isToday && styles.calendarCellToday,
+                    cell.day === null && styles.calendarCellEmpty,
+                  ]}
+                >
+                  {cell.day !== null && (
+                    <>
+                      <Text style={[styles.calendarDayNum, cell.isToday && styles.calendarDayNumToday]}>
+                        {cell.day}
+                      </Text>
+                      <View style={styles.iconRow}>
+                        {Array.from({ length: icon.count }).map((_, idx) => (
+                          <Ionicons
+                            key={idx}
+                            name={icon.name}
+                            size={icon.size}
+                            color={icon.color}
+                          />
+                        ))}
+                      </View>
+                    </>
+                  )}
+                </View>
+              );
+            })}
           </View>
-        ))}
-        {calendarDays.map((cell, i) => {
-            const icon = getCellIcons(cell);
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.calendarCell,
-                  cell.isToday && styles.calendarCellToday,
-                  cell.day === null && styles.calendarCellEmpty,
-                ]}
-              >
-                {cell.day !== null && (
-                  <>
-                    <Text style={[styles.calendarDayNum, cell.isToday && styles.calendarDayNumToday]}>
-                      {cell.day}
-                    </Text>
-                    <View style={styles.iconRow}>
-                      {Array.from({ length: icon.count }).map((_, idx) => (
-                        <Ionicons
-                          key={idx}
-                          name={icon.name}
-                          size={icon.size}
-                          color={icon.color}
-                        />
-                      ))}
-                    </View>
-                  </>
-                )}
-              </View>
-            );
-          })}
+))}
       </View>
 
+      {/*
+       * 4. LEYENDA
+       * Muestra los iconos y qué significa cada uno
+       */}
       <View style={styles.legendRow}>
         <View style={styles.legendItem}>
           <View style={styles.iconRow}>
@@ -246,6 +333,10 @@ export function HistorialCalendar() {
         </View>
       </View>
 
+      {/*
+       * 5. ESTADÍSTICAS DEL MES
+       * 2 cards: días con lluvia y promedio por día
+       */}
       <View style={styles.monthStatsRow}>
         <Card style={[styles.monthStatCard, { backgroundColor: COLORS.grayLight }]}>
           <Card.Content>
@@ -261,6 +352,10 @@ export function HistorialCalendar() {
         </Card>
       </View>
 
+      {/*
+       * 6. RÉCORD DIARIO
+       * Barra azul con el día más llovioso del mes
+       */}
       <View style={styles.recordCard}>
         <Text style={styles.recordLabel}>RÉCORD DIARIO</Text>
         <Text style={styles.recordValue}>{maxDayInMonth.mm.toFixed(1)} mm</Text>
@@ -274,7 +369,10 @@ export function HistorialCalendar() {
 }
 
 const styles = StyleSheet.create({
+  // Contenedor principal del calendario
   calendarContainer: { gap: 16 },
+
+  // Navegación de mes (flechas y título)
   monthNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -307,26 +405,67 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     marginTop: 4,
   },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  // -------------------------------------------------------
+  // GRILLA PRINCIPAL (CalendarGrid)
+  // -------------------------------------------------------
+  // backgroundColor: grayLight = fondo de toda la grilla
+  // borderRadius: 12 = esquinas del contenedor redondeadas
+  // padding: 8 = margen interno del contenedor
+  // gap: 3 = espaciado vertical entre filas de días
+  // Ya no usa flexWrap - ahora usa filas explícitas con calendarRow
+  // -------------------------------------------------------
+calendarGrid: {
     backgroundColor: COLORS.grayLight,
     borderRadius: 12,
     padding: 8,
-    gap: 4,
+    gap: 3,
   },
+
+  // -------------------------------------------------------
+  // FILA HORIZONTAL (encabezado y cada fila de días)
+  // -------------------------------------------------------
+  // flexDirection: 'row' → elementos en horizontal
+  // gap: 3 → espaciado entre celdas de la misma fila
+  // Esto reemplaza el viejo problema de (100-2)/7%
+  // -------------------------------------------------------
+  calendarRow: {
+    flexDirection: 'row',
+    gap: 3,
+  },
+
+  // -------------------------------------------------------
+  // CELDAS DE ENCABEZADO (días de semana: LUN...DOM)
+  // -------------------------------------------------------
+  // flex: 1 → exactamente 1/7 del ancho disponible
+  // No más cálculos de porcentaje, flex lo maneja solo
+  // -------------------------------------------------------
   calendarWeekdayCell: {
-    width: `${(100 - 2) / 7}%`,
+    flex: 1,
     alignItems: 'center',
     paddingVertical: 4,
   },
+
+  // -------------------------------------------------------
+  // CELDAS DE DÍAS DEL MES
+  // -------------------------------------------------------
+  // Mismo ancho que encabezado: ~(100-2)/7 = ~14%
+  // aspectRatio: 1 → celda cuadrada (importante para íconos)
+  // borderRadius: 8 → esquinas redondeadas
+  // backgroundColor: white → fondo blanco por celda
+  // -------------------------------------------------------
   calendarWeekdayText: {
     fontSize: 10,
     fontWeight: '600',
     color: COLORS.textSecondary,
   },
+// -------------------------------------------------------
+  // CELDAS DE DÍAS DEL MES
+  // -------------------------------------------------------
+  // flex: 1 → exactamente 1/7 del ancho disponible
+  // aspectRatio: 1 → celda cuadrada
+  // -------------------------------------------------------
   calendarCell: {
-    width: `${(100 - 2) / 7}%`,
+    flex: 1,
     aspectRatio: 1,
     backgroundColor: COLORS.white,
     borderRadius: 8,
@@ -350,6 +489,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.primary,
   },
+  // -------------------------------------------------------
+  // FILA DE ICONOS (dentro de cada celda de día)
+  // -------------------------------------------------------
+  // flexDirection: 'row' → iconos uno al lado del otro
+  // gap: 1 → espaciado mínimo entre los iconos (gotas)
+  // alignItems/justifyContent: 'center' → iconos centrados
+  // -------------------------------------------------------
   iconRow: {
     flexDirection: 'row',
     alignItems: 'center',
