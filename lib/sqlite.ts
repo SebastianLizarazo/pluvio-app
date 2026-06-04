@@ -67,6 +67,36 @@ export const insertLocalMeasurement = (measurement: Measurement): void => {
   );
 };
 
+export const updateLocalMeasurement = (measurement: Measurement): void => {
+  db.runSync(
+    `
+      UPDATE measurements SET
+        measured_at = ?,
+        volume_ml = ?,
+        rainfall_mm = ?,
+        no_rain = ?,
+        elapsed_minutes = ?,
+        observations = ?,
+        behaviors = ?,
+        synced = ?,
+        updated_at = ?
+      WHERE id = ?
+    `,
+    [
+      measurement.measuredAt,
+      measurement.volumeMl,
+      measurement.rainfallMm,
+      measurement.noRain ? 1 : 0,
+      measurement.elapsedMinutes,
+      measurement.observations,
+      JSON.stringify(measurement.behaviors),
+      measurement.synced ? 1 : 0,
+      measurement.updatedAt,
+      measurement.id,
+    ],
+  );
+};
+
 export const getPendingMeasurementsByUser = (userId: string): Measurement[] => {
   const rows = db.getAllSync<{
     id: string;
