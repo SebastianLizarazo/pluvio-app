@@ -35,6 +35,23 @@ const PRECIPITATION_OPTIONS = [
   { label: 'Otras', icon: 'ellipsis-horizontal' },
 ];
 
+// Límites de validación
+const MAX_ML = 200000; // 200L máximo para un registro
+const MAX_MM = 500; // 500mm máximo (lluvia extrema)
+
+// Limpia el input de valores inválidos
+const sanitizeNumericInput = (value: string): string => {
+  // Solo permite números y un punto decimal
+  return value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+};
+
+// Valida que el valor esté dentro del rango
+const clampValue = (value: number, max: number): number => {
+  if (isNaN(value) || value < 0) return 0;
+  if (value > max) return max;
+  return value;
+};
+
 export default function RegisterScreen() {
   const router = useRouter();
   const { appUser, userId } = useAppSession();
@@ -50,7 +67,9 @@ export default function RegisterScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [noRain, setNoRain] = useState(false);
+  const [inputMode, setInputMode] = useState<'ml' | 'mm'>('ml');
   const [volumeMl, setVolumeMl] = useState('');
+  const [directMm, setDirectMm] = useState('');
   const [rainfallMm, setRainfallMm] = useState<number | null>(null);
   const [selectedBehaviors, setSelectedBehaviors] = useState<string[]>([]);
   const [observations, setObservations] = useState('');
@@ -80,23 +99,55 @@ export default function RegisterScreen() {
     ? Math.round((Date.now() - new Date(latest.measuredAt).getTime()) / 3600000)
     : null;
 
-  // Auto-calculate rainfall when volume changes
+  // Auto-calculate rainfall when volume changes (ml mode)
   useEffect(() => {
-    if (volumeMl && !noRain) {
-      const volume = parseFloat(volumeMl);
-      if (!isNaN(volume)) {
-        // Formula: mm = volume_ml / (π * (diameter_cm/2)²)
-        // Assuming diameter of 20cm for MVP
-        const diameterCm = 20;
-        const radiusCm = diameterCm / 2;
-        const areaCm2 = Math.PI * Math.pow(radiusCm, 2);
-        const mm = volume / areaCm2;
-        setRainfallMm(Math.round(mm * 100) / 100);
-      }
-    } else if (noRain) {
-      setRainfallMm(0);
+    if (inputMode !== 'ml' || noRain) {
+      if (noRain) setRainfallMm(0);
+      return;
     }
-  }, [volumeMl, noRain]);
+
+    const rawValue = parseFloat(volumeMl);
+    if (isNaN(rawValue) || rawValue <= 0) {
+      setRainfallMm(null);
+      return;
+    }
+
+    // Clamp to max
+    const clamped = clampValue(rawValue, MAX_ML);
+    if (clamped !== rawValue) {
+      setVolumeMl(clamped.toString());
+    }
+
+    // Formula: mm = volume_ml / (π * (diameter_cm/2)²)
+    // Assuming diameter of 20cm for MVP
+    const diameterCm = 20;
+    const radiusCm = diameterCm / 2;
+    const areaCm2 = Math.PI * Math.pow(radiusCm, 2);
+    const mm = clamped / areaCm2;
+    setRainfallMm(Math.round(mm * 100) / 100);
+  }, [volumeMl, noRain, inputMode]);
+
+  // Handle direct mm input (mm mode)
+  useEffect(() => {
+    if (inputMode !== 'mm' || noRain) {
+      if (noRain) setRainfallMm(0);
+      return;
+    }
+
+    const rawValue = parseFloat(directMm);
+    if (isNaN(rawValue) || rawValue <= 0) {
+      setRainfallMm(null);
+      return;
+    }
+
+    // Clamp to max
+    const clamped = clampValue(rawValue, MAX_MM);
+    if (clamped !== rawValue) {
+      setDirectMm(clamped.toString());
+    }
+
+    setRainfallMm(Math.round(clamped * 100) / 100);
+  }, [directMm, noRain, inputMode]);
 
   const toggleBehavior = (behavior: string) => {
     // Only one precipitation type can be selected at a time
@@ -106,8 +157,9 @@ export default function RegisterScreen() {
   };
 
   const onSave = async () => {
-    if (!noRain && (!volumeMl || parseFloat(volumeMl) <= 0)) {
-      Alert.alert('Error', 'Ingresa el volumen en ml.');
+    if (!noRain && rainfallMm === null) {
+      const unit = inputMode === 'ml' ? 'ml' : 'mm';
+      Alert.alert('Error', `Ingresa un valor válido en ${unit}.`);
       return;
     }
 
@@ -129,6 +181,10 @@ export default function RegisterScreen() {
         ? Math.round((measuredAt.getTime() - new Date(latest.measuredAt).getTime()) / 60000)
         : null;
 
+      // Determine volumeMl and rainfallMm based on input mode
+      const finalMm = noRain ? 0 : (rainfallMm ?? 0);
+      const finalVolumeMl = inputMode === 'ml' && !noRain ? parseFloat(volumeMl) : null;
+
       // Create measurement object
       const now = new Date().toISOString();
       const measurement = {
@@ -136,8 +192,8 @@ export default function RegisterScreen() {
         userId: userId as string,
         pluviometerId,
         measuredAt: measuredAt.toISOString(),
-        volumeMl: noRain ? null : parseFloat(volumeMl),
-        rainfallMm: rainfallMm ?? 0,
+        volumeMl: finalVolumeMl,
+        rainfallMm: finalMm,
         noRain,
         elapsedMinutes,
         observations: observations.trim() || null,
@@ -256,21 +312,69 @@ export default function RegisterScreen() {
         <Card style={styles.card}>
           <Card.Content>
             <Text style={styles.cardLabel}>MEDICIÓN</Text>
-            <TextInput
-              mode="outlined"
-              label="Volumen (ml)"
-              value={volumeMl}
-              onChangeText={setVolumeMl}
-              keyboardType="numeric"
-              style={styles.input}
-              textColor={COLORS.textPrimary}
-              outlineColor={COLORS.textSecondary}
-              activeOutlineColor={COLORS.primary}
-            />
+
+            {/* Selector de unidad ml / mm */}
+            <View style={styles.unitSelector}>
+              <TouchableOpacity
+                style={[styles.unitButton, inputMode === 'ml' && styles.unitButtonActive]}
+                onPress={() => {
+                  setInputMode('ml');
+                  setDirectMm('');
+                  setRainfallMm(null);
+                }}
+              >
+                <Text style={[styles.unitButtonText, inputMode === 'ml' && styles.unitButtonTextActive]}>
+                  ml
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.unitButton, inputMode === 'mm' && styles.unitButtonActive]}
+                onPress={() => {
+                  setInputMode('mm');
+                  setVolumeMl('');
+                  setRainfallMm(null);
+                }}
+              >
+                <Text style={[styles.unitButtonText, inputMode === 'mm' && styles.unitButtonTextActive]}>
+                  mm
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Input según el modo */}
+            {inputMode === 'ml' ? (
+              <TextInput
+                mode="outlined"
+                label="Volumen (ml)"
+                value={volumeMl}
+                onChangeText={(text) => setVolumeMl(sanitizeNumericInput(text))}
+                keyboardType="numeric"
+                style={styles.input}
+                textColor={COLORS.textPrimary}
+                outlineColor={COLORS.textSecondary}
+                activeOutlineColor={COLORS.primary}
+                placeholder="Ej: 1500"
+              />
+            ) : (
+              <TextInput
+                mode="outlined"
+                label="Pluviosidad (mm)"
+                value={directMm}
+                onChangeText={(text) => setDirectMm(sanitizeNumericInput(text))}
+                keyboardType="numeric"
+                style={styles.input}
+                textColor={COLORS.textPrimary}
+                outlineColor={COLORS.textSecondary}
+                activeOutlineColor={COLORS.primary}
+                placeholder="Ej: 12.5"
+              />
+            )}
 
             {rainfallMm !== null && (
               <View style={styles.calculatedContainer}>
-                <Text style={styles.calculatedLabel}>Pluviosidad calculada:</Text>
+                <Text style={styles.calculatedLabel}>
+                  {inputMode === 'ml' ? 'Pluviosidad calculada:' : 'Valor registrado:'}
+                </Text>
                 <Text style={styles.calculatedValue}>{rainfallMm.toFixed(2)} mm</Text>
               </View>
             )}
@@ -435,6 +539,31 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: COLORS.white,
     color: COLORS.textPrimary,
+  },
+  unitSelector: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  unitButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  unitButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  unitButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  unitButtonTextActive: {
+    color: COLORS.white,
   },
   calculatedContainer: {
     flexDirection: 'row',
