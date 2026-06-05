@@ -67,10 +67,7 @@ export default function RegisterScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [noRain, setNoRain] = useState(false);
-  const [inputMode, setInputMode] = useState<'ml' | 'mm'>('ml');
-  const [volumeMl, setVolumeMl] = useState('');
-  const [directMm, setDirectMm] = useState('');
-  const [rainfallMm, setRainfallMm] = useState<number | null>(null);
+  const [rainfallMm, setRainfallMm] = useState('');
   const [selectedBehaviors, setSelectedBehaviors] = useState<string[]>([]);
   const [observations, setObservations] = useState('');
 
@@ -99,55 +96,24 @@ export default function RegisterScreen() {
     ? Math.round((Date.now() - new Date(latest.measuredAt).getTime()) / 3600000)
     : null;
 
-  // Auto-calculate rainfall when volume changes (ml mode)
+  // Auto-calculate rainfall when mm input changes
   useEffect(() => {
-    if (inputMode !== 'ml' || noRain) {
-      if (noRain) setRainfallMm(0);
+    if (noRain) {
+      setRainfallMm('0');
       return;
     }
 
-    const rawValue = parseFloat(volumeMl);
+    const rawValue = parseFloat(rainfallMm);
     if (isNaN(rawValue) || rawValue <= 0) {
-      setRainfallMm(null);
-      return;
-    }
-
-    // Clamp to max
-    const clamped = clampValue(rawValue, MAX_ML);
-    if (clamped !== rawValue) {
-      setVolumeMl(clamped.toString());
-    }
-
-    // Formula: mm = volume_ml / (π * (diameter_cm/2)²)
-    // Assuming diameter of 20cm for MVP
-    const diameterCm = 20;
-    const radiusCm = diameterCm / 2;
-    const areaCm2 = Math.PI * Math.pow(radiusCm, 2);
-    const mm = clamped / areaCm2;
-    setRainfallMm(Math.round(mm * 100) / 100);
-  }, [volumeMl, noRain, inputMode]);
-
-  // Handle direct mm input (mm mode)
-  useEffect(() => {
-    if (inputMode !== 'mm' || noRain) {
-      if (noRain) setRainfallMm(0);
-      return;
-    }
-
-    const rawValue = parseFloat(directMm);
-    if (isNaN(rawValue) || rawValue <= 0) {
-      setRainfallMm(null);
       return;
     }
 
     // Clamp to max
     const clamped = clampValue(rawValue, MAX_MM);
     if (clamped !== rawValue) {
-      setDirectMm(clamped.toString());
+      setRainfallMm(clamped.toString());
     }
-
-    setRainfallMm(Math.round(clamped * 100) / 100);
-  }, [directMm, noRain, inputMode]);
+  }, [rainfallMm, noRain]);
 
   const toggleBehavior = (behavior: string) => {
     // Only one precipitation type can be selected at a time
@@ -157,9 +123,8 @@ export default function RegisterScreen() {
   };
 
   const onSave = async () => {
-    if (!noRain && rainfallMm === null) {
-      const unit = inputMode === 'ml' ? 'ml' : 'mm';
-      Alert.alert('Error', `Ingresa un valor válido en ${unit}.`);
+    if (!noRain && !rainfallMm) {
+      Alert.alert('Error', 'Ingresa un valor válido en mm.');
       return;
     }
 
@@ -181,9 +146,8 @@ export default function RegisterScreen() {
         ? Math.round((measuredAt.getTime() - new Date(latest.measuredAt).getTime()) / 60000)
         : null;
 
-      // Determine volumeMl and rainfallMm based on input mode
-      const finalMm = noRain ? 0 : (rainfallMm ?? 0);
-      const finalVolumeMl = inputMode === 'ml' && !noRain ? parseFloat(volumeMl) : null;
+      // Determine rainfallMm based on noRain
+      const finalMm = noRain ? 0 : parseFloat(rainfallMm);
 
       // Create measurement object
       const now = new Date().toISOString();
@@ -192,7 +156,7 @@ export default function RegisterScreen() {
         userId: userId as string,
         pluviometerId,
         measuredAt: measuredAt.toISOString(),
-        volumeMl: finalVolumeMl,
+        volumeMl: null,
         rainfallMm: finalMm,
         noRain,
         elapsedMinutes,
@@ -313,69 +277,24 @@ export default function RegisterScreen() {
           <Card.Content>
             <Text style={styles.cardLabel}>MEDICIÓN</Text>
 
-            {/* Selector de unidad ml / mm */}
-            <View style={styles.unitSelector}>
-              <TouchableOpacity
-                style={[styles.unitButton, inputMode === 'ml' && styles.unitButtonActive]}
-                onPress={() => {
-                  setInputMode('ml');
-                  setDirectMm('');
-                  setRainfallMm(null);
-                }}
-              >
-                <Text style={[styles.unitButtonText, inputMode === 'ml' && styles.unitButtonTextActive]}>
-                  ml
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.unitButton, inputMode === 'mm' && styles.unitButtonActive]}
-                onPress={() => {
-                  setInputMode('mm');
-                  setVolumeMl('');
-                  setRainfallMm(null);
-                }}
-              >
-                <Text style={[styles.unitButtonText, inputMode === 'mm' && styles.unitButtonTextActive]}>
-                  mm
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {/* Input directo en mm */}
+            <TextInput
+              mode="outlined"
+              label="Pluviosidad (mm)"
+              value={rainfallMm}
+              onChangeText={(text) => setRainfallMm(sanitizeNumericInput(text))}
+              keyboardType="numeric"
+              style={styles.input}
+              textColor={COLORS.textPrimary}
+              outlineColor={COLORS.textSecondary}
+              activeOutlineColor={COLORS.primary}
+              placeholder="Ej: 12.5"
+            />
 
-            {/* Input según el modo */}
-            {inputMode === 'ml' ? (
-              <TextInput
-                mode="outlined"
-                label="Volumen (ml)"
-                value={volumeMl}
-                onChangeText={(text) => setVolumeMl(sanitizeNumericInput(text))}
-                keyboardType="numeric"
-                style={styles.input}
-                textColor={COLORS.textPrimary}
-                outlineColor={COLORS.textSecondary}
-                activeOutlineColor={COLORS.primary}
-                placeholder="Ej: 1500"
-              />
-            ) : (
-              <TextInput
-                mode="outlined"
-                label="Pluviosidad (mm)"
-                value={directMm}
-                onChangeText={(text) => setDirectMm(sanitizeNumericInput(text))}
-                keyboardType="numeric"
-                style={styles.input}
-                textColor={COLORS.textPrimary}
-                outlineColor={COLORS.textSecondary}
-                activeOutlineColor={COLORS.primary}
-                placeholder="Ej: 12.5"
-              />
-            )}
-
-            {rainfallMm !== null && (
+            {parseFloat(rainfallMm) > 0 && (
               <View style={styles.calculatedContainer}>
-                <Text style={styles.calculatedLabel}>
-                  {inputMode === 'ml' ? 'Pluviosidad calculada:' : 'Valor registrado:'}
-                </Text>
-                <Text style={styles.calculatedValue}>{rainfallMm.toFixed(1)} mm</Text>
+                <Text style={styles.calculatedLabel}>Valor registrado:</Text>
+                <Text style={styles.calculatedValue}>{parseFloat(rainfallMm).toFixed(1)} mm</Text>
               </View>
             )}
           </Card.Content>
