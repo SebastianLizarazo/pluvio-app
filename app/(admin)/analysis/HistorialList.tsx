@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-n
 import { Text, Card } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
 import { useAppSession } from '@/hooks/useAppSession';
@@ -38,6 +39,12 @@ export function HistorialList() {
 
   // Edit modal state
   const [editingMeasurement, setEditingMeasurement] = useState<Measurement | null>(null);
+  const queryClient = useQueryClient();
+
+  // Invalidate measurements cache after edit
+  const handleMeasurementUpdated = () => {
+    queryClient.invalidateQueries({ queryKey: ['user-measurements', userId as string] });
+  };
 
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getUTCMonth();
@@ -417,6 +424,7 @@ export function HistorialList() {
       <EditMeasurementModal
         measurement={editingMeasurement}
         onClose={closeEditModal}
+        onUpdated={handleMeasurementUpdated}
       />
     </View>
   );

@@ -22,9 +22,10 @@ const COLORS = {
 interface EditMeasurementModalProps {
   measurement: Measurement | null;
   onClose: () => void;
+  onUpdated?: () => void;
 }
 
-export function EditMeasurementModal({ measurement, onClose }: EditMeasurementModalProps) {
+export function EditMeasurementModal({ measurement, onClose, onUpdated }: EditMeasurementModalProps) {
   const supabaseClient = useSupabaseClient();
   const { userId } = useAppSession();
 
@@ -88,6 +89,9 @@ export function EditMeasurementModal({ measurement, onClose }: EditMeasurementMo
     try {
       updateLocalMeasurement(updatedMeasurement);
       handleClose();
+
+      // Invalidate measurements cache in parent
+      onUpdated?.();
 
       if (userId && supabaseClient) {
         syncPendingMeasurements(supabaseClient, userId).catch((err) => {
