@@ -375,7 +375,7 @@ export default function RegisterScreen() {
                 <Text style={styles.calculatedLabel}>
                   {inputMode === 'ml' ? 'Pluviosidad calculada:' : 'Valor registrado:'}
                 </Text>
-                <Text style={styles.calculatedValue}>{rainfallMm.toFixed(2)} mm</Text>
+                <Text style={styles.calculatedValue}>{rainfallMm.toFixed(1)} mm</Text>
               </View>
             )}
           </Card.Content>
