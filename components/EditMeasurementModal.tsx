@@ -118,37 +118,41 @@ export function EditMeasurementModal({ measurement, onClose }: EditMeasurementMo
           </View>
 
           <ScrollView style={styles.modalBody}>
-            {/* Date and Time - Read Only */}
-            <Text style={styles.modalLabel}>FECHA Y HORA</Text>
-            <View style={styles.modalDateTimeRow}>
-              <View style={styles.modalDateInput}>
-                <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} />
-                <Text style={styles.modalDateText}>{displayDate}</Text>
-              </View>
-              <View style={styles.modalTimeInput}>
-                <Ionicons name="time-outline" size={18} color={COLORS.textSecondary} />
-                <Text style={styles.modalDateText}>{displayTime}</Text>
+            {/* Section 1: Date and Time - Read Only */}
+            <View style={styles.section}>
+              <Text style={styles.modalLabel}>FECHA Y HORA</Text>
+              <View style={styles.modalDateTimeRow}>
+                <View style={styles.modalDateInput}>
+                  <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} />
+                  <Text style={styles.modalDateText}>{displayDate}</Text>
+                </View>
+                <View style={styles.modalTimeInput}>
+                  <Ionicons name="time-outline" size={18} color={COLORS.textSecondary} />
+                  <Text style={styles.modalDateText}>{displayTime}</Text>
+                </View>
               </View>
             </View>
 
-            {/* No Rain Toggle */}
-            <TouchableOpacity
-              style={[styles.modalNoRainButton, editNoRain && styles.modalNoRainButtonActive]}
-              onPress={() => setEditNoRain(!editNoRain)}
-            >
-              <Ionicons
-                name={editNoRain ? 'checkmark-circle' : 'ellipse-outline'}
-                size={20}
-                color={editNoRain ? COLORS.white : COLORS.textSecondary}
-              />
-              <Text style={[styles.modalNoRainText, editNoRain && styles.modalNoRainTextActive]}>
-                No llovió (0 mm)
-              </Text>
-            </TouchableOpacity>
+            {/* Section 2: No Rain Toggle */}
+            <View style={styles.section}>
+              <TouchableOpacity
+                style={[styles.modalNoRainButton, editNoRain && styles.modalNoRainButtonActive]}
+                onPress={() => setEditNoRain(!editNoRain)}
+              >
+                <Ionicons
+                  name={editNoRain ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={20}
+                  color={editNoRain ? COLORS.white : COLORS.textSecondary}
+                />
+                <Text style={[styles.modalNoRainText, editNoRain && styles.modalNoRainTextActive]}>
+                  No llovió (0 mm)
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-            {/* mm Input */}
+            {/* Section 3: mm Input */}
             {!editNoRain && (
-              <View style={styles.modalInputSection}>
+              <View style={styles.section}>
                 <Text style={styles.modalLabel}>PLUVIOSIDAD (mm)</Text>
                 <TextInput
                   mode="outlined"
@@ -164,44 +168,48 @@ export function EditMeasurementModal({ measurement, onClose }: EditMeasurementMo
               </View>
             )}
 
-            {/* Observations - Append Only */}
-            {measurement?.observations && (
-              <View style={styles.modalObservationsPreview}>
-                <Text style={styles.modalLabel}>OBSERVACIONES ACTUALES</Text>
-                <Text style={styles.observationsPreviewText}>{measurement.observations}</Text>
-              </View>
-            )}
-            <Text style={styles.modalLabel}>
-              {measurement?.observations ? 'AGREGAR OBSERVACIONES' : 'OBSERVACIONES'}
-            </Text>
-            <TextInput
-              mode="outlined"
-              multiline
-              numberOfLines={3}
-              value={editObservations}
-              onChangeText={setEditObservations}
-              style={styles.modalObservationsInput}
-              textColor={COLORS.textPrimary}
-              outlineColor={COLORS.textSecondary}
-              activeOutlineColor={COLORS.primary}
-              placeholder="Escribe para agregar..."
-            />
-            {editObservations.trim() !== '' && (
-              <Text style={styles.appendHint}>
-                📝 Las nuevas observaciones se agregarán a las existentes
+            {/* Section 4: Observations - Append Only */}
+            <View style={styles.section}>
+              {measurement?.observations && (
+                <View style={styles.modalObservationsPreview}>
+                  <Text style={styles.modalLabel}>OBSERVACIONES ACTUALES</Text>
+                  <Text style={styles.observationsPreviewText}>{measurement.observations}</Text>
+                </View>
+              )}
+              <Text style={styles.modalLabel}>
+                {measurement?.observations ? 'AGREGAR OBSERVACIONES' : 'OBSERVACIONES'}
               </Text>
-            )}
+              <TextInput
+                mode="outlined"
+                multiline
+                numberOfLines={3}
+                value={editObservations}
+                onChangeText={setEditObservations}
+                style={styles.modalObservationsInput}
+                textColor={COLORS.textPrimary}
+                outlineColor={COLORS.textSecondary}
+                activeOutlineColor={COLORS.primary}
+                placeholder="Escribe para agregar..."
+              />
+              {editObservations.trim() !== '' && (
+                <Text style={styles.appendHint}>
+                  📝 Las nuevas observaciones se agregarán a las existentes
+                </Text>
+              )}
+            </View>
 
             {/* Save Button */}
-            <Button
-              mode="contained"
-              onPress={handleSave}
-              buttonColor={COLORS.primary}
-              textColor={COLORS.white}
-              style={styles.modalSaveButton}
-            >
-              Guardar Cambios
-            </Button>
+            <View style={styles.section}>
+              <Button
+                mode="contained"
+                onPress={handleSave}
+                buttonColor={COLORS.primary}
+                textColor={COLORS.white}
+                style={styles.modalSaveButton}
+              >
+                Guardar Cambios
+              </Button>
+            </View>
           </ScrollView>
         </View>
       </View>
@@ -233,8 +241,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
-  modalBody: {
-    gap: 16,
+  modalBody: {},
+  section: {
+    marginBottom: 20,
   },
   modalLabel: {
     fontSize: 11,
