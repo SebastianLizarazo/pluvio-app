@@ -1,16 +1,14 @@
 import { useState, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Modal, Alert } from 'react-native';
-import { Text, Card, Button } from 'react-native-paper';
+import { View, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
+import { Text, Card } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useUserMeasurements } from '@/hooks/useUserMeasurements';
 import { useAppSession } from '@/hooks/useAppSession';
-import { getLocalMeasurementsByUser, updateLocalMeasurement } from '@/lib/sqlite';
-import { syncPendingMeasurements } from '@/lib/sync';
 import { toIsoDate } from '@/utils/date';
 import type { Measurement } from '@/types/domain';
-import { useSupabaseClient } from '@/hooks/useSupabaseClient';
+import { EditMeasurementModal } from '@/components/EditMeasurementModal';
 
 const COLORS = {
   primary: '#1B3A6B',
@@ -28,8 +26,6 @@ const MONTH_FULL_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio'
 export function HistorialList() {
   const { data: measurements = [] } = useUserMeasurements();
   const { userId } = useAppSession();
-  const supabaseClient = useSupabaseClient();
-  const localData = userId ? getLocalMeasurementsByUser(userId) : [];
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
@@ -42,11 +38,6 @@ export function HistorialList() {
 
   // Edit modal state
   const [editingMeasurement, setEditingMeasurement] = useState<Measurement | null>(null);
-  const [editDate, setEditDate] = useState<Date>(new Date());
-  const [editTime, setEditTime] = useState<Date>(new Date());
-  const [editMm, setEditMm] = useState('');
-  const [editNoRain, setEditNoRain] = useState(false);
-  const [editObservations, setEditObservations] = useState('');
 
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getUTCMonth();
@@ -162,60 +153,11 @@ export function HistorialList() {
   // Open edit modal with measurement data
   const openEditModal = (measurement: Measurement) => {
     setEditingMeasurement(measurement);
-    const measuredAtDate = new Date(measurement.measuredAt);
-    setEditDate(measuredAtDate);
-    setEditTime(measuredAtDate);
-    setEditMm(measurement.rainfallMm > 0 ? measurement.rainfallMm.toString() : '');
-    setEditNoRain(measurement.noRain);
-    setEditObservations(measurement.observations || '');
   };
 
   // Close edit modal
   const closeEditModal = () => {
     setEditingMeasurement(null);
-    setEditMm('');
-    setEditNoRain(false);
-    setEditObservations('');
-  };
-
-  // Save edited measurement
-  const saveEditedMeasurement = () => {
-    if (!editingMeasurement) return;
-
-    if (!editNoRain) {
-      const mmValue = parseFloat(editMm);
-      if (isNaN(mmValue) || mmValue <= 0) {
-        Alert.alert('Error', 'Ingresa un valor válido en mm.');
-        return;
-      }
-    }
-
-    const newMeasuredAt = new Date(editDate);
-    newMeasuredAt.setHours(editTime.getHours(), editTime.getMinutes(), 0, 0);
-
-    const updatedMeasurement: Measurement = {
-      ...editingMeasurement,
-      measuredAt: newMeasuredAt.toISOString(),
-      rainfallMm: editNoRain ? 0 : parseFloat(editMm),
-      noRain: editNoRain,
-      observations: editObservations.trim() || null,
-      synced: false, // Mark as unsynced so it syncs to Supabase
-      updatedAt: new Date().toISOString(),
-    };
-
-    try {
-      updateLocalMeasurement(updatedMeasurement);
-      closeEditModal();
-
-      // Trigger sync to Supabase
-      syncPendingMeasurements(supabaseClient, userId as string).catch((err) => {
-        console.warn('[HistorialList] Sync failed:', err);
-      });
-
-      Alert.alert('Éxito', 'Registro actualizado correctamente.');
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo actualizar el registro.');
-    }
   };
 
   const formatTime = (iso: string) => {
@@ -472,108 +414,10 @@ export function HistorialList() {
         </View>
       )}
 
-      {/* Edit Measurement Modal */}
-      <Modal
-        visible={editingMeasurement !== null}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeEditModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Editar Registro</Text>
-              <TouchableOpacity onPress={closeEditModal}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody}>
-              {/* Date and Time */}
-              <Text style={styles.modalLabel}>FECHA Y HORA</Text>
-              <View style={styles.modalDateTimeRow}>
-                <TouchableOpacity
-                  style={styles.modalDateInput}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Text style={styles.modalDateText}>
-                    {editDate.toLocaleDateString('es-ES')}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalTimeInput}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Text style={styles.modalDateText}>
-                    {editTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                  <Ionicons name="time-outline" size={18} color={COLORS.textSecondary} />
-                </TouchableOpacity>
-              </View>
-
-              {/* No Rain Toggle */}
-              <TouchableOpacity
-                style={[styles.modalNoRainButton, editNoRain && styles.modalNoRainButtonActive]}
-                onPress={() => setEditNoRain(!editNoRain)}
-              >
-                <Ionicons
-                  name={editNoRain ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={20}
-                  color={editNoRain ? COLORS.white : COLORS.textSecondary}
-                />
-                <Text style={[styles.modalNoRainText, editNoRain && styles.modalNoRainTextActive]}>
-                  No llovió (0 mm)
-                </Text>
-              </TouchableOpacity>
-
-              {/* mm Input */}
-              {!editNoRain && (
-                <View style={styles.modalInputSection}>
-                  <Text style={styles.modalLabel}>PLUVIOSIDAD (mm)</Text>
-                  <TextInput
-                    mode="outlined"
-                    label="mm"
-                    value={editMm}
-                    onChangeText={(text) => setEditMm(text.replace(/[^0-9.]/g, ''))}
-                    keyboardType="numeric"
-                    style={styles.modalInput}
-                    textColor={COLORS.textPrimary}
-                    outlineColor={COLORS.textSecondary}
-                    activeOutlineColor={COLORS.primary}
-                  />
-                </View>
-              )}
-
-              {/* Observations */}
-              <Text style={styles.modalLabel}>OBSERVACIONES</Text>
-              <TextInput
-                mode="outlined"
-                multiline
-                numberOfLines={3}
-                value={editObservations}
-                onChangeText={setEditObservations}
-                style={styles.modalObservationsInput}
-                textColor={COLORS.textPrimary}
-                outlineColor={COLORS.textSecondary}
-                activeOutlineColor={COLORS.primary}
-                placeholder="Opcional..."
-              />
-
-              {/* Save Button */}
-              <Button
-                mode="contained"
-                onPress={saveEditedMeasurement}
-                buttonColor={COLORS.primary}
-                textColor={COLORS.white}
-                style={styles.modalSaveButton}
-              >
-                Guardar Cambios
-              </Button>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <EditMeasurementModal
+        measurement={editingMeasurement}
+        onClose={closeEditModal}
+      />
     </View>
   );
 }
@@ -902,6 +746,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
   },
+  fitlerButtonActive: {
+    backgroundColor: COLORS.primary + '15',
+    borderColor: COLORS.primary,
+  },
   datePickerContainer: {
     backgroundColor: COLORS.grayLight,
     paddingVertical: 12,
@@ -916,102 +764,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.primary,
-  },
-  fitlerButtonActive: {
-    backgroundColor: COLORS.primary + '15',
-    borderColor: COLORS.primary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  modalBody: {
-    gap: 16,
-  },
-  modalLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  modalDateTimeRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalDateInput: {
-    flex: 1,
-    backgroundColor: COLORS.grayLight,
-    borderRadius: 8,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  modalTimeInput: {
-    width: 90,
-    backgroundColor: COLORS.grayLight,
-    borderRadius: 8,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  modalDateText: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  modalNoRainButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: COLORS.grayLight,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  modalNoRainButtonActive: {
-    backgroundColor: COLORS.green,
-    borderColor: COLORS.green,
-  },
-  modalNoRainText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  modalNoRainTextActive: {
-    color: COLORS.white,
-  },
-  modalInputSection: {
-    gap: 8,
-  },
-  modalInput: {
-    backgroundColor: COLORS.white,
-  },
-  modalObservationsInput: {
-    backgroundColor: COLORS.white,
-  },
-  modalSaveButton: {
-    marginTop: 8,
-    borderRadius: 8,
   },
 });
